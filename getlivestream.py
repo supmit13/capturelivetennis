@@ -1,0 +1,304 @@
+# -*- coding: utf-8 -*-
+import os, sys, re
+import urllib, urllib.request
+from bs4 import BeautifulSoup
+import unicodedata
+import io
+import gzip
+import time
+import simplejson as json
+import datetime
+import string
+import requests
+from urllib.parse import urlencode, quote_plus, urlparse
+import html
+import numpy as np
+import cv2
+from multiprocessing import Process, Pool
+
+
+partialUrlPattern = re.compile("^/\w+")
+
+def decodeHtmlEntities(content):
+    entitiesDict = {'&nbsp;' : ' ', '&quot;' : '"', '&lt;' : '<', '&gt;' : '>', '&amp;' : '&', '&apos;' : "'", '&#160;' : ' ', '&#60;' : '<', '&#62;' : '>', '&#38;' : '&', '&#34;' : '"', '&#39;' : "'"}
+    for entity in entitiesDict.keys():
+        content = content.replace(entity, entitiesDict[entity])
+    return(content)
+
+
+# Implement signal handler for ctrl+c here.
+def setSignal():
+    pass
+
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def http_error_302(self, req, fp, code, msg, headers):
+        infourl = urllib.response.addinfourl(fp, headers, req.get_full_url())
+        infourl.status = code
+        infourl.code = code
+        return infourl
+
+    http_error_300 = http_error_302
+    http_error_301 = http_error_302
+    http_error_303 = http_error_302
+    http_error_307 = http_error_302
+
+
+def unicodefraction_to_decimal(v):
+    fracPattern = re.compile("(\d*)\s*([^\s\.\,;a-zA-Z]+)")
+    fps = re.search(fracPattern, v)
+    if fps:
+        fpsg = fps.groups()
+        wholenumber = fpsg[0]
+        fraction = fpsg[1]
+        decimal = round(unicodedata.numeric(fraction), 3)
+        if wholenumber:
+            decimalstr = str(decimal).replace("0.", ".")
+        else:
+            decimalstr = str(decimal)
+        value = wholenumber + decimalstr
+        return value
+    return v
+
+
+class VideoBot(object):
+    htmltagPattern = re.compile("\<\/?[^\<\>]*\/?\>", re.DOTALL)
+    pathEndingWithSlashPattern = re.compile(r"\/$")
+
+    htmlEntitiesDict = {'&nbsp;' : ' ', '&#160;' : ' ', '&amp;' : '&', '&#38;' : '&', '&lt;' : '<', '&#60;' : '<', '&gt;' : '>', '&#62;' : '>', '&apos;' : '\'', '&#39;' : '\'', '&quot;' : '"', '&#34;' : '"'}
+
+    def __init__(self, siteurl):
+        # Create the opener object(s). Might need more than one type if we need to get pages with unwanted redirects.
+        self.opener = urllib.request.build_opener(urllib.request.HTTPHandler(), urllib.request.HTTPSHandler()) # This is my normal opener....
+        self.no_redirect_opener = urllib.request.build_opener(urllib.request.HTTPHandler(), urllib.request.HTTPSHandler(), NoRedirectHandler()) # ... and this one won't handle redirects.
+        #self.debug_opener = urllib.request.build_opener(urllib.request.HTTPHandler(debuglevel=1))
+        # Initialize some object properties.
+        self.sessionCookies = ""
+        self.httpHeaders = { 'User-Agent' : r'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36',  'Accept' : 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9', 'Accept-Language' : 'en-us,en;q=0.5', 'Accept-Encoding' : 'gzip,deflate', 'Accept-Charset' : 'ISO-8859-1,utf-8;q=0.7,*;q=0.7', 'Keep-Alive' : '115', 'Connection' : 'keep-alive', }
+        self.httpHeaders['cache-control'] = "max-age=0"
+        self.httpHeaders['upgrade-insecure-requests'] = "1"
+        self.httpHeaders['sec-fetch-dest'] = "document"
+        self.httpHeaders['sec-fetch-mode'] = "navigate"
+        self.httpHeaders['sec-fetch-site'] = "same-origin"
+        self.httpHeaders['sec-fetch-user'] = "?1"
+        self.httpHeaders['sec-ch-ua-mobile'] = "?0"
+        self.httpHeaders['sec-ch-ua'] = "\".Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"103\", \"Chromium\";v=\"103\""
+        self.httpHeaders['sec-ch-ua-platform'] = "Linux"
+        self.httpHeaders['cookie'] = "cookiecheck=1; referer=https%3A%2F%2Flive.itftennis.com%2Fen%2Flive-streams%2F;cookieconsent_status=allow; _gat=1"
+        self.httpHeaders['referer'] = "https://live.itftennis.com/en/live-streams/video.php?vid=34421611"
+        self.homeDir = os.getcwd()
+        self.siteUrl = siteurl
+        self.requestUrl = siteurl
+        parsedUrl = urlparse(self.requestUrl)
+        self.baseUrl = parsedUrl.scheme + "://" + parsedUrl.netloc
+        #print(self.requestUrl)
+        self.pageRequest = urllib.request.Request(self.requestUrl, headers=self.httpHeaders)
+        self.pageResponse = None
+        self.requestMethod = "GET"
+        self.postData = {}
+        self.nolivestreamtext = "There are currently no live streams available"
+        try:
+            self.pageResponse = self.opener.open(self.pageRequest)
+            headers = self.pageResponse.getheaders()
+            #print(headers)
+            if "Location" in headers:
+                self.requestUrl = headers["Location"]
+                self.pageRequest = urllib.request.Request(self.requestUrl, headers=self.httpHeaders)
+                try:
+                    self.pageResponse = self.no_redirect_opener.open(self.pageRequest)
+                except:
+                    print ("Couldn't fetch page due to limited connectivity. Please check your internet connection and try again. %s"%sys.exc_info()[1].__str__())
+                    sys.exit()
+        except:
+            print ("Couldn't fetch page due to limited connectivity. Please check your internet connection and try again. %s"%sys.exc_info()[1].__str__())
+            sys.exit()
+        self.httpHeaders["Referer"] = self.requestUrl
+        self.sessionCookies = self.__class__._getCookieFromResponse(self.pageResponse)
+        self.httpHeaders["Cookie"] = self.sessionCookies
+        # Initialize the account related variables...
+        self.currentPageContent = self.__class__._decodeGzippedContent(self.getPageContent())
+        self.livestreamcheckinterval = 10 # 10 seconds.
+        self.chunk_size = 1024
+        self.time_limit = 86400 # time in seconds (1 day), for recording. Event will end before this, and we need to be able to recognize it.
+        
+
+    def checkforlivestream(self):
+        self.pageRequest = urllib.request.Request(self.siteUrl, headers=self.httpHeaders)
+        try:
+            self.pageResponse = self.opener.open(self.pageRequest)
+            headers = self.pageResponse.getheaders()
+            #print(headers)
+            if "Location" in headers:
+                self.requestUrl = headers["Location"]
+                self.pageRequest = urllib.request.Request(self.requestUrl, headers=self.httpHeaders)
+                try:
+                    self.pageResponse = self.no_redirect_opener.open(self.pageRequest)
+                except:
+                    print ("Error. %s"%sys.exc_info()[1].__str__())
+                    sys.exit()
+        except:
+            print ("Error: %s"%sys.exc_info()[1].__str__())
+            sys.exit()
+        self.currentPageContent = self.__class__._decodeGzippedContent(self.getPageContent())
+        livestreamurls = []
+        if self.nolivestreamtext in self.currentPageContent:
+            print("No live stream is available now")
+            return livestreamurls
+        else:
+            # Get the streamurls from the page
+            soup = BeautifulSoup(self.currentPageContent, features="html.parser")
+            videodivtags = soup.find_all("div", {'class' : 'video_thumbnail'})
+            for videodiv in videodivtags:
+                liveitag = videodiv.find("i", {'class' : 'video_is_live'})
+                if not liveitag:
+                    continue
+                else:
+                    liveitext = liveitag.renderContents().decode('utf-8')
+                    liveitext = liveitext.replace("\n", "").replace("\r", "")
+                    if liveitext == "LIVE":
+                        livestreamanchor = videodiv.find("a")
+                        if livestreamanchor is not None:
+                            livestreamurl = livestreamanchor['href']
+                            if not livestreamurl.startswith("https://"):
+                                livestreamurl = self.baseUrl + livestreamurl
+                            livestreamurls.append(livestreamurl)
+        # Return all stream urls
+        return livestreamurls
+
+
+    def _decodeGzippedContent(cls, encoded_content):
+        response_stream = io.BytesIO(encoded_content)
+        decoded_content = ""
+        try:
+            gzipper = gzip.GzipFile(fileobj=response_stream)
+            decoded_content = gzipper.read()
+        except: # Maybe this isn't gzipped content after all....
+            decoded_content = encoded_content
+        decoded_content = decoded_content.decode('utf-8')
+        return(decoded_content)
+
+    _decodeGzippedContent = classmethod(_decodeGzippedContent)
+
+
+    def _getCookieFromResponse(cls, lastHttpResponse):
+        cookies = ""
+        responseCookies = lastHttpResponse.getheader("Set-Cookie")
+        pathPattern = re.compile(r"Path=/;", re.IGNORECASE)
+        domainPattern = re.compile(r"Domain=[^;,]+(;|,)", re.IGNORECASE)
+        expiresPattern = re.compile(r"Expires=[^;]+;", re.IGNORECASE)
+        maxagePattern = re.compile(r"Max-Age=[^;]+;", re.IGNORECASE)
+        samesitePattern = re.compile(r"SameSite=[^;]+;", re.IGNORECASE)
+        securePattern = re.compile(r"secure;?", re.IGNORECASE)
+        httponlyPattern = re.compile(r"HttpOnly;?", re.IGNORECASE)
+        if responseCookies and responseCookies.__len__() > 1:
+            cookieParts = responseCookies.split("Path=/")
+            for i in range(cookieParts.__len__()):
+                cookieParts[i] = re.sub(domainPattern, "", cookieParts[i])
+                cookieParts[i] = re.sub(expiresPattern, "", cookieParts[i])
+                cookieParts[i] = re.sub(maxagePattern, "", cookieParts[i])
+                cookieParts[i] = re.sub(samesitePattern, "", cookieParts[i])
+                cookieParts[i] = re.sub(securePattern, "", cookieParts[i])
+                cookieParts[i] = re.sub(pathPattern, "", cookieParts[i])
+                cookieParts[i] = re.sub(httponlyPattern, "", cookieParts[i])
+                cookieParts[i] = cookieParts[i].replace(",", "")
+                cookieParts[i] = re.sub(re.compile("\s+", re.DOTALL), "", cookieParts[i])
+                cookies += cookieParts[i]
+        cookies = cookies.replace(";;", ";")
+        return(cookies)
+
+    _getCookieFromResponse = classmethod(_getCookieFromResponse)
+
+
+    def getPageContent(self):
+        return(self.pageResponse.read())
+
+
+    def capturelivestream(self, argslist):
+        streamurl, outfilename = argslist[0], argslist[1]
+        print("Capturing stream...")
+        file_handle = open(outfilename, 'wb')
+        start_time_in_seconds = time.time()
+        time_elapsed = 0
+        with requests.Session() as session:
+            response = session.get(streamurl, stream=True)
+            for chunk in response.iter_content(chunk_size=self.chunk_size):
+                if time_elapsed > self.time_limit:
+                    break
+                # to print time elapsed   
+                if int(time.time() - start_time_in_seconds)- time_elapsed > 0 :
+                    time_elapsed = int(time.time() - start_time_in_seconds)
+                    print(time_elapsed, end='\r', flush=True)
+                if chunk:
+                    file_handle.write(chunk)
+        file_handle.close()
+
+
+    def capturelivestream_cv2(self, argslist):
+        streamurl, outfilename = argslist[0], argslist[1]
+        cap = cv2.VideoCapture(streamurl)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) + 0.5)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) + 0.5)
+        size = (width, height)
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        #fourcc = -1
+        out = cv2.VideoWriter(outfilename, fourcc, 20.0, size)
+        while(True):
+            ret, frame = cap.read()
+            if ret==True:
+                out.write(frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            else:
+                break
+        # Done!
+        cap.release()
+        out.release()
+        cv2.destroyAllWindows()
+
+
+    def getstreamurlfrompage(self, streampageurl):
+        pagerequest = urllib.request.Request(streampageurl, headers=self.httpHeaders)
+        try:
+            pageresponse = self.opener.open(pagerequest)
+            pagecontent = self.__class__._decodeGzippedContent(pageresponse.read())
+        except:
+            print("Error: %s"%sys.exc_info()[1].__str__())
+            pagecontent = ""
+        pagePattern = re.compile("\"streamUrl\"\: \"(.*?)\"", re.DOTALL)
+        pps = re.search(pagePattern, pagecontent)
+        if pps:
+            streamurl = pps.groups()[0]
+        else:
+            streamurl = None
+        return streamurl
+    
+
+if __name__ == "__main__":
+    if sys.argv.__len__() < 2:
+        print("Insufficient parameters")
+        sys.exit()
+    siteurl = sys.argv[1]
+    itftennis = VideoBot(siteurl)
+    while True:
+        streampageurls = itftennis.checkforlivestream()
+        if streampageurls.__len__() > 0:
+            p = Pool(streampageurls.__len__())
+            argslist = []
+            for streampageurl in streampageurls:
+                streamurl = itftennis.getstreamurlfrompage(streampageurl)
+                print("Adding %s to list..."%streamurl)
+                if streamurl is not None:
+                    outfilename = time.strftime("/home/supmit/work/test/tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
+                    argslist.append([streamurl, outfilename])
+                    #p = Process(target=itftennis.capturelivestream, args=(streamurl, outfilename,))
+                    #p = Process(target=itftennis.capturelivestream_cv2, args=(streamurl, outfilename,))
+                    #p.start()
+                else:
+                    print("Couldn't get the stream url from page")
+            p.map(itftennis.capturelivestream_cv2, argslist)
+        time.sleep(itftennis.livestreamcheckinterval)
+    
+    
+
+
+# supmit
+

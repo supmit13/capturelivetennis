@@ -127,8 +127,10 @@ class VideoBot(object):
         self.processq = mgr.Queue(maxsize=100000)
         self.size = (320, 180)
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        self.FPS = 1/30 # This is the delay that would be applied after every read(). This would 'normalize' the frame rate and handle frame loss jitters.
+        # itftennis streams have a rate of 25 fps.
+        self.FPS = 1/25 # This is the delay that would be applied after every read(). This would 'normalize' the frame rate and handle frame loss jitters.
         self.FPS_MS = int(self.FPS * 1000) # Same delay as above, in milliseconds.
+        self.DEBUG = 1 # TODO: Remember to set it to 0 (or False) before deploying somewhere.
         
 
     def checkforlivestream(self):
@@ -255,8 +257,11 @@ class VideoBot(object):
         cap = cv2.VideoCapture(streamurl)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) + 0.5)
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) + 0.5)
-        print(width)
-        print(height)
+        if self.DEBUG:
+            print("Width: %s"%width)
+            print("Height: %s"%height)
+            fps_in = cap.get(cv2.CAP_PROP_FPS)
+            print("Incoming frame rate: %s"%fps_in)
         size = (width, height)
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         #fourcc = -1
@@ -279,7 +284,11 @@ class VideoBot(object):
         streamurl, outnum = argslist[0], argslist[1]
         cap = cv2.VideoCapture(streamurl)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 2) # With limited buffer size, we can expect to have the latest frame while reading.
-        #cap.set(cv2.CAP_PROP_FPS, 30) # Should we alter the frames rate and set it to 30 fps?
+        # check the incoming frame rate if we are in DEBUG mode
+        if self.DEBUG:
+            fps_in = cap.get(cv2.CAP_PROP_FPS)
+            print("Incoming frame rate: %s"%fps_in)
+        cap.set(cv2.CAP_PROP_FPS, 20) # Should we alter the frames rate and set it to 20 fps?
         while(True):
             if cap.isOpened():
                 ret, frame = cap.read()
@@ -295,11 +304,13 @@ class VideoBot(object):
                 if retval: # retval is True, so reconnect to the stream...
                     cap = cv2.VideoCapture(streamurl)
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+                    if self.DEBUG: # Check incoming frame rate if DEBUG mode is set
+                        fps_in = cap.get(cv2.CAP_PROP_FPS)
+                        print("Incoming frame rate: %s"%fps_in)
                 else: # Stream is not available anymore
                     print("Stream %s is no longer available."%streamurl)
                     break
-        # Done!
-        cap.release()
+        cap.release() # Done!
         #cv2.destroyAllWindows()
 
     
@@ -393,13 +404,15 @@ if __name__ == "__main__":
 
 # How to run: python getlivestream.py https://live.itftennis.com/en/live-streams/
 """
-References
+References:
+https://en.wikipedia.org/wiki/Video_compression_picture_types
 https://www.geeksforgeeks.org/saving-operated-video-from-a-webcam-using-opencv/
 https://stackoverflow.com/questions/58293187/opencv-real-time-streaming-video-capture-is-slow-how-to-drop-frames-or-get-sync
 https://www.fourcc.org/downloads/
 https://stackoverflow.com/questions/55828451/video-streaming-from-ip-camera-in-python-using-opencv-cv2-videocapture
 https://stackoverflow.com/questions/55099413/python-opencv-streaming-from-camera-multithreading-timestamps
 https://stackoverflow.com/questions/58592291/how-to-capture-multiple-camera-streams-with-opencv
+https://www.it-jim.com/blog/practical-aspects-of-real-time-video-pipelines/
 """
 # supmit
 

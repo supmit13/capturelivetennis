@@ -125,9 +125,10 @@ class VideoBot(object):
         self.time_limit = 86400 # time in seconds (1 day), for recording. Event will end before this, and we need to be able to recognize it.
         mgr = mp.Manager()
         self.processq = mgr.Queue(maxsize=100000)
-        self.outlist = []
         self.size = (320, 180)
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        self.FPS = 1/30 # This is the delay that would be applied after every read(). This would 'normalize' the frame rate and handle frame loss jitters.
+        self.FPS_MS = int(self.FPS * 1000) # Same delay as above, in milliseconds.
         
 
     def checkforlivestream(self):
@@ -221,6 +222,14 @@ class VideoBot(object):
         return(self.pageResponse.read())
 
 
+    def verifystream(self, videolink):
+        cap = cv2.VideoCapture(videolink)
+        if not cap.isOpened():
+            return False
+        cap.release()
+        return True
+
+
     def capturelivestream(self, argslist):
         streamurl, outfilename = argslist[0], argslist[1]
         print("Capturing stream...")
@@ -269,17 +278,29 @@ class VideoBot(object):
     def capturelivestream_cv2_q(self, argslist):
         streamurl, outnum = argslist[0], argslist[1]
         cap = cv2.VideoCapture(streamurl)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 2) # With limited buffer size, we can expect to have the latest frame while reading.
+        #cap.set(cv2.CAP_PROP_FPS, 30) # Should we alter the frames rate and set it to 30 fps?
         while(True):
-            ret, frame = cap.read()
-            if ret==True:
-                self.processq.put([outnum, frame])
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret==True:
+                    self.processq.put([outnum, frame])
+                    #if cv2.waitKey(1) & 0xFF == ord('q'):
+                    #break
+                    time.sleep(self.FPS)
+                else:
+                    pass
+            else: # Check if the streamurl is still having the feed
+                retval = self.verifystream(streamurl)
+                if retval: # retval is True, so reconnect to the stream...
+                    cap = cv2.VideoCapture(streamurl)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+                else: # Stream is not available anymore
+                    print("Stream %s is no longer available."%streamurl)
                     break
-            else:
-                break
         # Done!
         cap.release()
-        cv2.destroyAllWindows()
+        #cv2.destroyAllWindows()
 
     
     def framewriter(self, outlist):
@@ -308,9 +329,13 @@ class VideoBot(object):
                 elif endofrun and isempty:
                     print("Could not find any frames to process. Quitting")
                     break
-        for out in outlist:
-            out.release()
+        print("Done writing feeds. Quitting.")
         return None
+
+
+    def show_frame(self, frame):
+        cv2.imshow('frame', frame)
+        cv2.waitKey(self.FPS_MS)
 
 
     def getstreamurlfrompage(self, streampageurl):
@@ -343,6 +368,7 @@ if __name__ == "__main__":
     while True:
         streampageurls = itftennis.checkforlivestream()
         if streampageurls.__len__() > 0:
+            print("Detected %s new live stream(s)... Getting them."%streampageurls.__len__())
             p = Pool(streampageurls.__len__())
             argslist = []
             for streampageurl in streampageurls:
@@ -353,17 +379,27 @@ if __name__ == "__main__":
                     out = cv2.VideoWriter(outfilename, itftennis.fourcc, 20.0, itftennis.size)
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
-                    print(outnum)
+                    #print(outnum)
                     argslist.append([streamurl, outnum])
                 else:
                     print("Couldn't get the stream url from page")
             p.map(itftennis.capturelivestream_cv2_q, argslist)
             #p.map(itftennis.capturelivestream_cv2, argslist)
         time.sleep(itftennis.livestreamcheckinterval)
-    #t.join()
+    t.join()
+    for out in outlist:
+        out.release()
 
 
 # How to run: python getlivestream.py https://live.itftennis.com/en/live-streams/
-
+"""
+References
+https://www.geeksforgeeks.org/saving-operated-video-from-a-webcam-using-opencv/
+https://stackoverflow.com/questions/58293187/opencv-real-time-streaming-video-capture-is-slow-how-to-drop-frames-or-get-sync
+https://www.fourcc.org/downloads/
+https://stackoverflow.com/questions/55828451/video-streaming-from-ip-camera-in-python-using-opencv-cv2-videocapture
+https://stackoverflow.com/questions/55099413/python-opencv-streaming-from-camera-multithreading-timestamps
+https://stackoverflow.com/questions/58592291/how-to-capture-multiple-camera-streams-with-opencv
+"""
 # supmit
 

@@ -14,7 +14,11 @@ from urllib.parse import urlencode, quote_plus, urlparse
 import html
 import numpy as np
 import cv2
-from multiprocessing import Process, Pool
+from multiprocessing import Process, Pool, Queue
+import multiprocessing as mp
+from threading import Thread
+
+
 
 
 partialUrlPattern = re.compile("^/\w+")
@@ -119,6 +123,11 @@ class VideoBot(object):
         self.livestreamcheckinterval = 10 # 10 seconds.
         self.chunk_size = 1024
         self.time_limit = 86400 # time in seconds (1 day), for recording. Event will end before this, and we need to be able to recognize it.
+        mgr = mp.Manager()
+        self.processq = mgr.Queue(maxsize=100000)
+        self.outlist = []
+        self.size = (320, 180)
+        self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
         
 
     def checkforlivestream(self):
@@ -237,6 +246,8 @@ class VideoBot(object):
         cap = cv2.VideoCapture(streamurl)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) + 0.5)
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) + 0.5)
+        print(width)
+        print(height)
         size = (width, height)
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         #fourcc = -1
@@ -255,6 +266,53 @@ class VideoBot(object):
         cv2.destroyAllWindows()
 
 
+    def capturelivestream_cv2_q(self, argslist):
+        streamurl, outnum = argslist[0], argslist[1]
+        cap = cv2.VideoCapture(streamurl)
+        while(True):
+            ret, frame = cap.read()
+            if ret==True:
+                self.processq.put([outnum, frame])
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            else:
+                break
+        # Done!
+        cap.release()
+        cv2.destroyAllWindows()
+
+    
+    def framewriter(self, outlist):
+        isempty = False
+        endofrun = False
+        while True:
+            frame = None
+            args = self.processq.get()
+            outnum = args[0]
+            frame = args[1]
+            if outlist.__len__() > outnum:
+                out = outlist[outnum]
+            else:
+                continue
+            if frame is not None and out.isOpened():
+                out.write(frame)
+                #print("Wrote a frame to %s..."%outnum)
+                isempty = False
+                endofrun = False
+            else:
+                if self.processq.empty() and not isempty:
+                    isempty = True
+                elif self.processq.empty() and isempty: # This means all frameq queues are empty.
+                    time.sleep(10) # Sleep for 10 secs.
+                    endofrun = True
+                elif endofrun and isempty:
+                    print("Could not find any frames to process. Quitting")
+                    break
+        for out in outlist:
+            out.release()
+        return None
+
+
     def getstreamurlfrompage(self, streampageurl):
         pagerequest = urllib.request.Request(streampageurl, headers=self.httpHeaders)
         try:
@@ -270,7 +328,7 @@ class VideoBot(object):
         else:
             streamurl = None
         return streamurl
-    
+
 
 if __name__ == "__main__":
     if sys.argv.__len__() < 2:
@@ -278,6 +336,10 @@ if __name__ == "__main__":
         sys.exit()
     siteurl = sys.argv[1]
     itftennis = VideoBot(siteurl)
+    outlist = []
+    t = Thread(target=itftennis.framewriter, args=(outlist,))
+    t.daemon = True
+    t.start()
     while True:
         streampageurls = itftennis.checkforlivestream()
         if streampageurls.__len__() > 0:
@@ -287,18 +349,21 @@ if __name__ == "__main__":
                 streamurl = itftennis.getstreamurlfrompage(streampageurl)
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
-                    outfilename = time.strftime("/home/supmit/work/test/tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
-                    argslist.append([streamurl, outfilename])
-                    #p = Process(target=itftennis.capturelivestream, args=(streamurl, outfilename,))
-                    #p = Process(target=itftennis.capturelivestream_cv2, args=(streamurl, outfilename,))
-                    #p.start()
+                    outfilename = time.strftime("/home/supmit/work/capturelivefeed/tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
+                    out = cv2.VideoWriter(outfilename, itftennis.fourcc, 20.0, itftennis.size)
+                    outlist.append(out) # Save it in the list and take down the number for usage in framewriter
+                    outnum = outlist.__len__() - 1
+                    print(outnum)
+                    argslist.append([streamurl, outnum])
                 else:
                     print("Couldn't get the stream url from page")
-            p.map(itftennis.capturelivestream_cv2, argslist)
+            p.map(itftennis.capturelivestream_cv2_q, argslist)
+            #p.map(itftennis.capturelivestream_cv2, argslist)
         time.sleep(itftennis.livestreamcheckinterval)
-    
-    
+    #t.join()
 
+
+# How to run: python getlivestream.py https://live.itftennis.com/en/live-streams/
 
 # supmit
 

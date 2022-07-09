@@ -259,7 +259,7 @@ def searchfeeds(request):
     endid = page * chunksize
     context = {}
     # If we reached here, then we may conduct the search.
-    feedsqset = Feed.objects.filter(feedtitle__icontains=searchtext).order_by('-id')[startid:endid]
+    feedsqset = Feed.objects.filter(feedtitle__icontains=searchtext, deleted=False).order_by('-id')[startid:endid]
     feedslist = []
     for feedobj in feedsqset:
         d = {}
@@ -282,6 +282,51 @@ def searchfeeds(request):
         context['showpagination'] = 1
     context['error'] = ""
     return HttpResponse(json.dumps(context))
+
+
+@login_required(login_url='/feedauth/showlogin/')
+@csrf_protect
+def deleteselected(request):
+    if request.method != 'POST':
+        message = "Invalid method of call"
+        return HttpResponse(message)
+    if not request.user.is_authenticated:
+        message = "Your session is invalid. Please login to perform this operation"
+        return HttpResponse(message)
+    requestbody = str(request.body)
+    requestdict = urllib.parse.parse_qs(requestbody)
+    #print(requestdict)
+    # Convert all double quotes in input to single quotes... pain! Also, urllib.parse.parse_qs leaves "b'" in the keys in some cases.
+    newrequestdict = {}
+    for k in requestdict.keys():
+        newk = k.replace("b'", "")
+        newrequestdict[newk] = requestdict[k][0].replace('"', "'")
+    feedids = ""
+    feedidlist = []
+    if 'feedids' in newrequestdict.keys():
+        feedids = newrequestdict['feedids']
+    else:
+        message = "Could not find feed IDs in request"
+        return HttpResponse(message)
+    feedidlist = feedids.split("#")
+    if feedidlist.__len__() == 0:
+        message = "There were no feed IDs in the request"
+        return HttpResponse(message)
+    delctr = 0
+    for fid in feedidlist:
+        feedobj = None
+        try:
+            feedobj = Feed.objects.get(id=fid)
+        except:
+            continue
+        feedobj.deleted = True
+        try:
+            feedobj.save()
+        except:
+            continue
+        delctr += 1
+    message = "Deleted %s feeds successfully"%delctr
+    return HttpResponse(message)
 
 
 @login_required(login_url='/feedauth/showlogin/')

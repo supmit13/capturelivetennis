@@ -229,18 +229,19 @@
 	xmlhttp.send(postdata);
     }
 
-    function searchtitles(){
+    function searchtitles(page=1){
 	fsearchbox = document.getElementById('searchbox');
         searchtext = fsearchbox.value;
         postdata = "q=" + encodeURIComponent(searchtext);
+	postdata += "&page=" + page;
         csrf = document.frmdummy.csrfmiddlewaretoken.value;
   	postdata = postdata + "&csrfmiddlewaretoken=" + csrf;
         var xmlhttp;
 	if (window.XMLHttpRequest){
-	xmlhttp=new XMLHttpRequest();
+	    xmlhttp=new XMLHttpRequest();
 	}
 	else{
-	xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+	    xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
 	}
 	// Register the handler
 	xmlhttp.onreadystatechange = function(){
@@ -254,7 +255,7 @@
 	    }
 	    else{
 		if(responseobj.hasOwnProperty('feedslist')){
-                    showsearcharea(feedsarea, responseobj.feedslist);
+                    showsearcharea(feedsarea, responseobj.feedslist, page);
 		}
 		else{
 		    feedsarea.innerHTML = "<p style='color:#DD0000;text-align:center;'>Could not find any feeds in the response</p>";
@@ -267,7 +268,7 @@
 	xmlhttp.send(postdata);
     }
 
-    function showsearcharea(feedsarea, feedslist){
+    function showsearcharea(feedsarea, feedslist, page=1){
 	feedsarea.innerHTML = "";
   	if(feedslist.length == 0){
 	    feedsarea.innerHTML = "No feeds matched your search";
@@ -281,8 +282,55 @@
 	}
 	searchcontent += "</tbody>";
 	feedsarea.innerHTML = searchcontent;
+	paginationdivtag = document.getElementById('paginationdiv');
+	nextpage = page + 1;
+	prevpage = page - 1;
+	paginationcontent = "<ul class='pagination'>";
+	if(page > 1){
+	    paginationcontent += "<li><a href='#' data-original-title='' title='' onclick='javascript:searchtitles(" + prevpage + ");'>Prev</a></li> |||";
+	}
+	paginationcontent += "<li><a href='#' data-original-title='' title='' onclick='javascript:searchtitles(" + nextpage + ");'>Next</a></li></ul>";
+	paginationdivtag.innerHTML = paginationcontent;
 	return(1); // The return value is not relevant, though.
     }
+
+    function deleteselected(){
+	chkpattern = /^chk_(?<fid>\d+)$/;
+	allelements = document.frmdummy.elements;
+	feedids = "";
+	for(var i=0;i < allelements.length;i++){
+	    elname = allelements[i].name;
+	    elmatch = chkpattern.exec(elname);
+	    if(elmatch != null){
+		if(allelements[i].checked == true){
+		    fid = elmatch.groups.fid;
+		    feedids += fid + "#";
+		}
+	    }
+	}
+	feedids = feedids.substring(0, feedids.length - 1);
+	postdata = "feedids=" + encodeURIComponent(feedids);
+        csrf = document.frmdummy.csrfmiddlewaretoken.value;
+  	postdata = postdata + "&csrfmiddlewaretoken=" + csrf;
+        var xmlhttp;
+	if (window.XMLHttpRequest){
+	    xmlhttp=new XMLHttpRequest();
+	}
+	else{
+	    xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+	}
+	// Register the handler
+	xmlhttp.onreadystatechange = function(){
+	if(xmlhttp.readyState == 4 && xmlhttp.status==200){
+	    alert(xmlhttp.responseText);
+	    window.location.href = window.location.href.replace("#", "");
+	}
+	};
+	xmlhttp.open("POST", "/feedman/deleteselected/", true);
+	xmlhttp.setRequestHeader("X-CSRFToken", csrf);
+	xmlhttp.send(postdata);
+    }
+
     </script>
 </head>
 
@@ -539,17 +587,18 @@
                                         </tbody>
                                     </table>
                                 </form></div>
-				{% if showpagination == 1 %}
-				<div class="text-xs-center">
-				    <ul class="pagination">
-					<li><a href="?page={{prevpage}}" data-original-title="" title="">Prev</a></li> |||
-					<li><a href="?page={{nextpage}}" data-original-title="" title="">Next</a></li> 
-				    </ul>
-				</div>
-				{% endif %}
+				<button type='button' class='btn btn-default btn-lg' value='Delete Feeds' onclick='javascript:deleteselected();'>Delete Feeds</button>
                             </div>
                         </div>
                     </div>
+		    {% if showpagination == 1 %}
+			<div class="text-xs-center" id='paginationdiv' style="text-align:center;">
+			    <ul class="pagination">
+				<li><a href="?page={{prevpage}}" data-original-title="" title="">Prev</a></li> |||
+				<li><a href="?page={{nextpage}}" data-original-title="" title="">Next</a></li> 
+			    </ul>
+			</div>
+		    {% endif %}
                 </div>
                 <!-- ============================================================== -->
                 <!-- End PAge Content -->

@@ -298,9 +298,9 @@ class VideoBot(object):
                 ret, frame = cap.read()
                 if ret == True:
                     self.processq.put([outnum, frame])
-                    if self.DEBUG:
-                        self.show_frame(frame)
-                    #time.sleep(self.FPS)
+                    #if self.DEBUG:
+                    #    self.show_frame(frame)
+                    time.sleep(self.FPS)
                 else:
                     pass
             else: # Check if the streamurl is still having the feed
@@ -505,8 +505,8 @@ if __name__ == "__main__":
                         print("Error in data insertion to DB: %s\nErroneous SQL: %s"%(sys.exc_info()[1].__str__(), feedinsertsql))
                 else:
                     print("Couldn't get the stream url from page")
-                if itftennis.DEBUG: # Let only a single stream be processed for debugging.
-                    break
+                #if itftennis.DEBUG: # Let only a single stream be processed for debugging.
+                #    break
             p.map(itftennis.capturelivestream_cv2_q, argslist)
         time.sleep(itftennis.livestreamcheckinterval)
     t.join()

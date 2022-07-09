@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <!-- Tell the browser to be responsive to screen width -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="keywords" content="Tennis, lawn tennis, Wimbledon">
+    <meta name="description"
+        content="ITF Tennis Feeds Management">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Feeds List - Feed Manager</title>
+    <link rel="canonical" href="https://www.wrappixel.com/templates/materialpro-lite/" />
+    <!-- Favicon icon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/assets/images/favicon.png">
+    <!-- Custom CSS -->
+    <link href="/static/css/style.min.css" rel="stylesheet">
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+    <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+<![endif]-->
+    <script type="text/javascript">
+    function changeall(){
+        chkall = document.getElementById('chk_all');
+        frmobj = document.frmdummy;
+        if(chkall.checked == true){
+	    chkpattern = new RegExp(/chk_\d+/gi);
+	    for(var i=0; i < frmobj.elements.length; i++){
+		elname = frmobj.elements[i].name;
+                if(elname.match(chkpattern)){
+		    frmobj.elements[i].checked = true;
+		}
+	    }
+        }
+        else{
+	    chkpattern = new RegExp(/chk_\d+/gi);
+	    for(var i=0; i < frmobj.elements.length; i++){
+		elname = frmobj.elements[i].name;
+                if(elname.match(chkpattern)){
+		    frmobj.elements[i].checked = false;
+		}
+	    }
+        }
+    }
+
+    function deletefeed(feedid){
+        postdata = "feedid=" + feedid;
+        csrf = document.frmdummy.csrfmiddlewaretoken.value;
+  	postdata = postdata + "&csrfmiddlewaretoken=" + csrf;
+	var xmlhttp;
+	if (window.XMLHttpRequest){
+	xmlhttp=new XMLHttpRequest();
+	}
+	else{
+	xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+	}
+	// Register the handler
+	xmlhttp.onreadystatechange = function(){
+	if(xmlhttp.readyState == 4 && xmlhttp.status==200){
+	alert(xmlhttp.responseText);
+	window.location.href = window.location.href;
+	}
+	};
+	xmlhttp.open("POST", "/feedman/deletefeed/", true);
+	xmlhttp.setRequestHeader("X-CSRFToken", csrf);
+	xmlhttp.send(postdata);
+    }
+
+
+    function savefeed(){
+	csrf = document.frmdummy.csrfmiddlewaretoken.value;
+	ffid = document.frmdummy.feedid.value;
+	//alert(ffid);
+        ffeedtitle = document.frmdummy.title.value;
+        fplayer1 = document.frmdummy.player1.value;
+	fplayer2 = document.frmdummy.player2.value;
+	feventtype = document.frmdummy.eventtype.value;
+	ffeedpath = document.frmdummy.feedpath.value;
+	fstartdate = new Date(document.frmdummy.startdate.value);
+	try{
+	    fenddate = new Date(document.frmdummy.enddate.value);
+	}
+	catch(err){
+	    fenddate = "";
+	}
+	if(fenddate == 'Invalid Date'){
+	    fenddate = "";
+	}
+	fdeleted = 0;
+	if(document.frmdummy.deleted[0].checked == true){
+	    deleted = 1;
+	}
+	//alert(deleted);
+        if(fstartdate != ""){
+	    fstartdate = fstartdate.toISOString();
+	}
+	else{
+	    fstartdate = "";
+	}
+	if(fenddate != ""){
+	    fenddate = fenddate.toISOString();
+	}
+	else{
+	    fenddate = "";
+	}
+	fresult = document.frmdummy.result.options[document.frmdummy.result.options.selectedIndex].value;
+	fstatus = document.frmdummy.status.options[document.frmdummy.status.options.selectedIndex].value;
+	postdata = "feedid=" + ffid + "&csrfmiddlewaretoken=" + csrf + "&title=" + ffeedtitle + "&player1=" + encodeURIComponent(fplayer1) + "&player2=" + encodeURIComponent(fplayer2) + "&eventtype=" + encodeURIComponent(feventtype) + "&feedpath=" + encodeURIComponent(ffeedpath) + "&startdate=" + encodeURIComponent(fstartdate) + "&enddate=" + encodeURIComponent(fenddate) + "&deleted=" + fdeleted + "&result=" + encodeURIComponent(fresult) + "&status=" + fstatus;
+        csrf = document.frmdummy.csrfmiddlewaretoken.value;
+  	//alert(postdata);
+	var xmlhttp;
+	if (window.XMLHttpRequest){
+	xmlhttp=new XMLHttpRequest();
+	}
+	else{
+	xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+	}
+	// Register the handler
+	xmlhttp.onreadystatechange = function(){
+	if(xmlhttp.readyState == 4 && xmlhttp.status==200){
+	    alert(xmlhttp.responseText);
+	    window.location.href = window.location.href.replace("#", "");
+	}
+	};
+	xmlhttp.open("POST", "/feedman/savefeed/", true);
+	xmlhttp.setRequestHeader("X-CSRFToken", csrf);
+	xmlhttp.send(postdata);
+    }
+
+    function backtolist(){
+	window.location.href=window.location.href.replace("#", "");
+    }
+
+    function showeditarea(area, feed){
+	area.innerHTML = "";
+        newhtml = "<tbody>";
+	newhtml += "<tr><td colspan=3>Feed Title:</td><td colspan=4><input type='text' class='form-control' name='title' value='" + feed.title.replace(/'/g, "&quot;") + "'></td></tr>";
+	newhtml += "<tr><td colspan=3>Team #1:</td><td colspan=4><input type='text' class='form-control' name='player1' value='" + feed.player1.replace(/'/g, "&quot;") + "'></td></tr>";
+        newhtml += "<tr><td colspan=3>Team #2:</td><td colspan=4><input type='text' class='form-control' name='player2' value='" + feed.player2.replace(/'/g, "&quot;") + "'></td></tr>";
+        newhtml += "<tr><td colspan=3>Match Type:</td><td colspan=4><input type='text' class='form-control' name='eventtype' value='" + feed.eventtype.replace(/'/g, "&quot;") + "'></td></tr>";
+        newhtml += "<tr><td colspan=3>Result:</td><td colspan=4><select class='form-control' name='result' id='result'>";
+	for (optionval in feed.resultoptions) {
+  	    if(feed.result != "" && feed.result == feed.resultoptions[optionval]){
+		newhtml += "<option value='" + feed.resultoptions[optionval] + "' selected>" + feed.resultoptions[optionval] + "</option>";
+	    }
+	    else if(feed.result == "" && feed.resultoptions[optionval] == "unknown"){
+		newhtml += "<option value='' selected>" + feed.resultoptions[optionval] + "</option>";
+	    }
+	    else{
+		newhtml += "<option value='" + feed.resultoptions[optionval] + "'>" + feed.resultoptions[optionval] + "</option>";
+	    }
+	}
+	newhtml += "</select></td></tr>";
+	newhtml += "<tr><td colspan=3>Feed Path:</td><td colspan=4><input type='text' class='form-control' name='feedpath' value='" + feed.feedpath + "'></td></tr>";
+	newhtml += "<tr><td colspan=3>Status:</td><td colspan=4><select class='form-control' name='status' id='status'>";
+	if(feed.status == "live"){
+	    newhtml += "<option value='live' selected>Live</option><option value='past'>Past</option>";
+	}
+	else{
+	    newhtml += "<option value='live'>Live</option><option value='past' selected>Past</option>";
+	}
+	newhtml += "</select></td></tr>";
+	// Add datetime fields
+	if(feed.startdate != "" && feed.startdate != 'None'){
+            startdate = new Date(feed.startdate);
+            startdate = startdate.toISOString().replace("Z", "");
+            //console.log(startdate);
+	}
+	else{
+	    startdate = "";
+	}
+        newhtml += "<tr><td colspan=3>Start Date:</td><td colspan=4><input type='datetime-local' class='form-control' name='startdate' value='" + startdate + "'></td></tr>";
+        if(feed.enddate != ""){
+            enddate = new Date(feed.enddate);
+            enddate = enddate.toISOString().replace("Z", "");
+	}
+	else{
+	    enddate = "";
+	}
+ 	newhtml += "<tr><td colspan=3>End Date:</td><td colspan=4><input type='datetime-local' class='form-control' name='enddate' value='" + enddate + "'></td></tr>";
+        if(feed.deleted == true){
+	    newhtml += "<tr><td colspan=3>Deleted:</td><td colspan=4><input type='radio' class='form-check-input' name='deleted' value='1' checked>Yes&nbsp;<input type='radio' class='form-check-input' name='deleted' value='0'>No</td></tr>";
+	}
+	else{
+	    newhtml += "<tr><td colspan=3>Deleted:</td><td colspan=4><input type='radio' class='form-check-input' name='deleted' value='1'>Yes&nbsp;<input type='radio' class='form-check-input' name='deleted' value='0' checked>No</td></tr>";
+	}
+	newhtml += "<tr><td colspan=5>&nbsp;</td><td align='right'>";
+	newhtml += "<button type='button' class='btn btn-default btn-lg' value='Save' onclick='javascript:savefeed();'>Save</button></td><td align='left'><button type='button' class='btn btn-default btn-lg' value='Back' onclick='javascript:backtolist();'>Cancel</button>";
+        newhtml += "</td></tr>";
+        newhtml += "</tbody><input type='hidden' name='feedid' value='" + feed.fid + "'>";
+        area.innerHTML = newhtml;
+    }
+
+    function editfeed(feedid){
+        // Send request for data associated with received feed ID
+        postdata = "feedid=" + feedid;
+        csrf = document.frmdummy.csrfmiddlewaretoken.value;
+  	postdata = postdata + "&csrfmiddlewaretoken=" + csrf;
+        var xmlhttp;
+	if (window.XMLHttpRequest){
+	xmlhttp=new XMLHttpRequest();
+	}
+	else{
+	xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+	}
+	// Register the handler
+	xmlhttp.onreadystatechange = function(){
+	if(xmlhttp.readyState == 4 && xmlhttp.status==200){
+	    // Display an area with the editable fields...
+	    feedsarea = document.getElementById('feeds');
+            feedsarea.innerHTML = "";
+            feedobj = JSON.parse(xmlhttp.responseText);
+            showeditarea(feedsarea, feedobj);
+	}
+	};
+	xmlhttp.open("POST", "/feedman/editfeed/", true);
+	xmlhttp.setRequestHeader("X-CSRFToken", csrf);
+	xmlhttp.send(postdata);
+    }
+    </script>
+</head>
+
+<body>
+    <!-- ============================================================== -->
+    <!-- Preloader - style you can find in spinners.css -->
+    <!-- ============================================================== -->
+    <div class="preloader">
+        <div class="lds-ripple">
+            <div class="lds-pos"></div>
+            <div class="lds-pos"></div>
+        </div>
+    </div>
+    <!-- ============================================================== -->
+    <!-- Main wrapper - style you can find in pages.scss -->
+    <!-- ============================================================== -->
+    <div id="main-wrapper" data-layout="vertical" data-navbarbg="skin5" data-sidebartype="full"
+        data-sidebar-position="absolute" data-header-position="absolute" data-boxed-layout="full">
+        <!-- ============================================================== -->
+        <!-- Topbar header - style you can find in pages.scss -->
+        <!-- ============================================================== -->
+        <header class="topbar" data-navbarbg="skin6">
+            <nav class="navbar top-navbar navbar-expand-md navbar-dark">
+                <div class="navbar-header" data-logobg="skin6">
+                    <!-- ============================================================== -->
+                    <!-- Logo -->
+                    <!-- ============================================================== -->
+                    <a class="navbar-brand ms-4" href="index.html">
+                        <!-- Logo icon -->
+                        <b class="logo-icon">
+                            <!--You can put here icon as well // <i class="wi wi-sunset"></i> //-->
+                            <!-- Dark Logo icon -->
+                            <img src="/static/assets/images/logo-light-icon.png" alt="homepage" class="dark-logo" />
+
+                        </b>
+                        <!--End Logo icon -->
+                        <!-- Logo text -->
+                        <span class="logo-text">
+                            <!-- dark Logo text -->
+                            <img src="/static/assets/images/logo-light-text.png" alt="homepage" class="dark-logo" />
+
+                        </span>
+                    </a>
+                    <!-- ============================================================== -->
+                    <!-- End Logo -->
+                    <!-- ============================================================== -->
+                    <!-- ============================================================== -->
+                    <!-- toggle and nav items -->
+                    <!-- ============================================================== -->
+                    <a class="nav-toggler waves-effect waves-light text-white d-block d-md-none"
+                        href="javascript:void(0)"><i class="ti-menu ti-close"></i></a>
+                </div>
+                <!-- ============================================================== -->
+                <!-- End Logo -->
+                <!-- ============================================================== -->
+                <div class="navbar-collapse collapse" id="navbarSupportedContent" data-navbarbg="skin5">
+                    <ul class="navbar-nav d-lg-none d-md-block ">
+                        <li class="nav-item">
+                            <a class="nav-toggler nav-link waves-effect waves-light text-white "
+                                href="javascript:void(0)"><i class="ti-menu ti-close"></i></a>
+                        </li>
+                    </ul>
+                    <!-- ============================================================== -->
+                    <!-- toggle and nav items -->
+                    <!-- ============================================================== -->
+                    <ul class="navbar-nav me-auto mt-md-0 ">
+                        <!-- ============================================================== -->
+                        <!-- Search -->
+                        <!-- ============================================================== -->
+
+                        <li class="nav-item search-box">
+                            <a class="nav-link text-muted" href="javascript:void(0)"><i class="ti-search"></i></a>
+                            <form class="app-search" style="display: none;">
+                                <input type="text" class="form-control" placeholder="Search &amp; enter"> <a
+                                    class="srh-btn"><i class="ti-close"></i></a> </form>
+                        </li>
+                    </ul>
+
+                    <!-- ============================================================== -->
+                    <!-- Right side toggle and nav items -->
+                    <!-- ============================================================== -->
+                    <ul class="navbar-nav">
+                        <!-- ============================================================== -->
+                        <!-- User profile and search -->
+                        <!-- ============================================================== -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle text-muted waves-effect waves-dark" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <img src="/static/assets/images/users/1.jpg" alt="user" class="profile-pic me-2">{{username}}
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="navbarDropdown"></ul>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+        </header>
+        <!-- ============================================================== -->
+        <!-- End Topbar header -->
+        <!-- ============================================================== -->
+        <!-- ============================================================== -->
+        <!-- Left Sidebar - style you can find in sidebar.scss  -->
+        <!-- ============================================================== -->
+        <aside class="left-sidebar" data-sidebarbg="skin6">
+            <!-- Sidebar scroll-->
+            <div class="scroll-sidebar">
+                <!-- Sidebar navigation-->
+                <nav class="sidebar-nav">
+                    <ul id="sidebarnav">
+                        <!-- User Profile-->
+                        <li class="sidebar-item"> <a class="sidebar-link waves-effect waves-dark sidebar-link"
+                                href="/feedman/adduser/" aria-expanded="false"><i class="mdi me-2 mdi-gauge"></i><span
+                                    class="hide-menu">Add User</span></a></li>
+                        <li class="sidebar-item"> <!-- <a class="sidebar-link waves-effect waves-dark sidebar-link"
+                                href="pages-profile.html" aria-expanded="false">
+                                <i class="mdi me-2 mdi-account-check"></i><span class="hide-menu">Profile</span></a> -->
+                        </li>
+                        <li class="sidebar-item"> <!-- <a class="sidebar-link waves-effect waves-dark sidebar-link"
+                                href="table-basic.html" aria-expanded="false"><i class="mdi me-2 mdi-table"></i><span
+                                    class="hide-menu">Table</span></a> -->
+			</li>
+                        <li class="sidebar-item"> <!-- <a class="sidebar-link waves-effect waves-dark sidebar-link"
+                                href="icon-material.html" aria-expanded="false"><i
+                                    class="mdi me-2 mdi-emoticon"></i><span class="hide-menu">Icon</span></a> -->
+			</li>
+                        <li class="sidebar-item"> <!-- <a class="sidebar-link waves-effect waves-dark sidebar-link"
+                                href="map-google.html" aria-expanded="false"><i class="mdi me-2 mdi-earth"></i><span
+                                    class="hide-menu">Google Map</span></a> -->
+			</li>
+                        <li class="sidebar-item"> <!-- <a class="sidebar-link waves-effect waves-dark sidebar-link"
+                                href="pages-blank.html" aria-expanded="false"><i
+                                    class="mdi me-2 mdi-book-open-variant"></i><span class="hide-menu">Blank</span></a> -->
+                        </li>
+                        <li class="sidebar-item"> <!-- <a class="sidebar-link waves-effect waves-dark sidebar-link"
+                                href="pages-error-404.html" aria-expanded="false"><i class="mdi me-2 mdi-help-circle"></i><span
+                                    class="hide-menu">Error 404</span></a> -->
+                        </li>
+                        <!-- <li class="text-center p-20 upgrade-btn">
+                            <a href="https://www.wrappixel.com/templates/materialpro/"
+                                class="btn btn-warning text-white mt-4" target="_blank">Upgrade to
+                                Pro</a>
+                        </li> -->
+                    </ul>
+
+                </nav>
+                <!-- End Sidebar navigation -->
+            </div>
+            <!-- End Sidebar scroll-->
+            <div class="sidebar-footer">
+                <div class="row">
+                    <div class="col-4 link-wrap">
+                        <!-- item-->
+                        <a href="/feedman/settings/" class="link" data-toggle="tooltip" title="" data-original-title="Settings"><i
+                                class="ti-settings"></i></a>
+                    </div>
+                    <div class="col-4 link-wrap">
+                        <!-- item-->
+                        <a href="/feedman/sendmail/" class="link" data-toggle="tooltip" title="" data-original-title="Email"><i
+                                class="mdi mdi-gmail"></i></a>
+                    </div>
+                    <div class="col-4 link-wrap">
+                        <!-- item-->
+                        <a href="/feedauth/logout/" class="link" data-toggle="tooltip" title="" data-original-title="Logout"><i
+                                class="mdi mdi-power"></i></a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+        <!-- ============================================================== -->
+        <!-- End Left Sidebar - style you can find in sidebar.scss  -->
+        <!-- ============================================================== -->
+        <!-- ============================================================== -->
+        <!-- Page wrapper  -->
+        <!-- ============================================================== -->
+        <div class="page-wrapper">
+            <!-- ============================================================== -->
+            <!-- Bread crumb and right sidebar toggle -->
+            <!-- ============================================================== -->
+            <div class="page-breadcrumb">
+                <div class="row align-items-center">
+                    <div class="col-md-6 col-8 align-self-center">
+                        <h3 class="page-title mb-0 p-0">{{pagetitle}}</h3>
+                        <div class="d-flex align-items-center">
+                            <nav aria-label="breadcrumb">
+                                <ol class="breadcrumb">
+                                    <!-- <li class="breadcrumb-item"><a href="#">Home</a></li>
+                                    <li class="breadcrumb-item active" aria-current="page">Table</li> -->
+                                </ol>
+                            </nav>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-4 align-self-center">
+                        <div class="text-end upgrade-btn">
+                            <!-- <a href="https://www.wrappixel.com/templates/materialpro/"
+                                class="btn btn-danger d-none d-md-inline-block text-white" target="_blank">Upgrade to
+                                Pro</a> -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ============================================================== -->
+            <!-- End Bread crumb and right sidebar toggle -->
+            <!-- ============================================================== -->
+            <!-- ============================================================== -->
+            <!-- Container fluid  -->
+            <!-- ============================================================== -->
+            <div class="container-fluid">
+                <!-- ============================================================== -->
+                <!-- Start Page Content -->
+                <!-- ============================================================== -->
+                <div class="row">
+                    <!-- column -->
+                    <div class="col-sm-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <!-- <h4 class="card-title">Basic Table</h4>
+                                <h6 class="card-subtitle">Add class <code>.table</code></h6> -->
+                                <div class="table-responsive"><form name='frmdummy' id='frmdummy' method='POST'>
+				    {% csrf_token %}
+                                    <table class="table user-table" id='feeds'>
+                                        <thead>
+                                            <tr>
+                                                <th class="border-top-0">ID</th>
+                                                <th class="border-top-0">Title</th>
+                                                <th class="border-top-0">Player #1</th>
+                                                <th class="border-top-0">Player #2</th>
+						<th class="border-top-0">Match Date</th>
+						<th class="border-top-0">Type</th>
+						<th class="border-top-0">Result</th>
+						<th class="border-top-0"><input type='checkbox' name='chk_all' id='chk_all' value="1" onclick="javascript:changeall();">&nbsp;Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+					    {% for feed in feedslist %}
+                                            <tr>
+                                                <td>{{feed.fid}}</td>
+                                                <td>{{feed.title}}</td>
+                                                <td>{{feed.player1}}</td>
+                                                <td>{{feed.player2}}</td>
+						<td>{{feed.matchdate}}</td>
+						<td>{{feed.matchtype}}</td>
+						<td>{{feed.result}}</td>
+						<td><input type='checkbox' name='chk_{{feed.fid}}' id='chk_{{feed.fid}}' value="{{feed.fid}}">&nbsp;&nbsp;<a href="#" onclick="javascript:editfeed({{feed.fid}});"><img src="/static/images/editicon.png"></a>&nbsp;&nbsp;<a href="#" onclick="javascript:deletefeed({{feed.fid}});"><img src="/static/images/deleteicon.png"></a></td>
+                                            </tr>
+					    {% endfor %}
+                                            {% if feedslist|length == 0 %}
+					    <tr><td colspan=8 align="center">There are no feeds in DB</td></tr>
+					    {% endif %}
+                                        </tbody>
+                                    </table>
+                                </form></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- ============================================================== -->
+                <!-- End PAge Content -->
+                <!-- ============================================================== -->
+                <!-- ============================================================== -->
+                <!-- Right sidebar -->
+                <!-- ============================================================== -->
+                <!-- .right-sidebar -->
+                <!-- ============================================================== -->
+                <!-- End Right sidebar -->
+                <!-- ============================================================== -->
+            </div>
+            <!-- ============================================================== -->
+            <!-- End Container fluid  -->
+            <!-- ============================================================== -->
+            <!-- ============================================================== -->
+            <!-- footer -->
+            <!-- ============================================================== -->
+            <footer class="footer"> © 2021 Material Pro Admin by <a href="https://www.wrappixel.com/">wrappixel.com </a>
+            </footer>
+            <!-- ============================================================== -->
+            <!-- End footer -->
+            <!-- ============================================================== -->
+        </div>
+        <!-- ============================================================== -->
+        <!-- End Page wrapper  -->
+        <!-- ============================================================== -->
+    </div>
+    <!-- ============================================================== -->
+    <!-- End Wrapper -->
+    <!-- ============================================================== -->
+    <!-- ============================================================== -->
+    <!-- All Jquery -->
+    <!-- ============================================================== -->
+    
+    <script src="/static/assets/plugins/jquery/dist/jquery.min.js"></script>
+    <!-- Bootstrap tether Core JavaScript -->
+    <script src="/static/assets/plugins/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/app-style-switcher.js"></script>
+    <!--Wave Effects -->
+    <script src="/static/js/waves.js"></script>
+    <!--Menu sidebar -->
+    <script src="/static/js/sidebarmenu.js"></script>
+    <!--Custom JavaScript -->
+    <script src="/static/js/custom.js"></script>
+</body>
+
+</html>

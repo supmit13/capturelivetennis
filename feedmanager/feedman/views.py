@@ -45,8 +45,8 @@ def listfeeds(request):
         d = {}
         d['title'] = feedobj.feedtitle
         d['fid'] = feedobj.id
-        d['player1'] = feedobj.feedeventteam1
-        d['player2'] = feedobj.feedeventteam2
+        d['player1'] = feedobj.feedeventteam1.replace(",", "<br/>")
+        d['player2'] = feedobj.feedeventteam2.replace(",", "<br/>")
         d['matchdate'] = feedobj.feedstart
         d['matchtype'] = feedobj.eventtype
         d['result'] = feedobj.eventresult
@@ -225,8 +225,63 @@ def deletefeed(request):
 
 
 @login_required(login_url='/feedauth/showlogin/')
-def searchfeed(request):
-    pass
+@csrf_protect
+def searchfeeds(request):
+    if request.method != 'POST':
+        message = "Invalid method of call"
+        context = {'error' : message}
+        return HttpResponse(json.dumps(context))
+    if not request.user.is_authenticated:
+        message = "Your session is invalid. Please login to perform this operation"
+        context = {'error' : message}
+        return HttpResponse(json.dumps(context))
+    requestbody = str(request.body)
+    requestdict = urllib.parse.parse_qs(requestbody)
+    #print(requestdict)
+    # Convert all double quotes in input to single quotes... pain! Also, urllib.parse.parse_qs leaves "b'" in the keys in some cases.
+    newrequestdict = {}
+    for k in requestdict.keys():
+        newk = k.replace("b'", "")
+        newrequestdict[newk] = requestdict[k][0].replace('"', "'")
+    page = 1
+    if 'page' in newrequestdict.keys():
+        page = int(newrequestdict['page'])
+    searchtext = ""
+    if 'q' in newrequestdict.keys():
+        searchtext = newrequestdict['q']
+    whitespacePattern = re.compile("^\s*$")
+    if re.search(whitespacePattern, searchtext):
+        message = "You did not specify any meaningful text"
+        context = {'error' : message}
+        return HttpResponse(json.dumps(context))
+    chunksize = int(settings.CHUNKSIZE)
+    startid = page * chunksize - chunksize
+    endid = page * chunksize
+    context = {}
+    # If we reached here, then we may conduct the search.
+    feedsqset = Feed.objects.filter(feedtitle__icontains=searchtext).order_by('-id')[startid:endid]
+    feedslist = []
+    for feedobj in feedsqset:
+        d = {}
+        d['title'] = feedobj.feedtitle
+        d['fid'] = feedobj.id
+        d['player1'] = feedobj.feedeventteam1.replace(",", "<br/>")
+        d['player2'] = feedobj.feedeventteam2.replace(",", "<br/>")
+        d['matchdate'] = str(feedobj.feedstart)
+        d['matchtype'] = feedobj.eventtype
+        d['result'] = feedobj.eventresult
+        d['status'] = feedobj.feedstatus # If this is a live event, we display it in green.
+        feedslist.append(d)
+    context['feedslist'] = feedslist
+    nextpage = page + 1
+    prevpage = page - 1
+    context['nextpage'] = nextpage
+    context['prevpage'] = prevpage
+    context['showpagination'] = 0
+    if page > 1 and allfeedsqset.__len__() >= chunksize:
+        context['showpagination'] = 1
+    context['error'] = ""
+    return HttpResponse(json.dumps(context))
 
 
 @login_required(login_url='/feedauth/showlogin/')

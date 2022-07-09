@@ -228,6 +228,61 @@
 	xmlhttp.setRequestHeader("X-CSRFToken", csrf);
 	xmlhttp.send(postdata);
     }
+
+    function searchtitles(){
+	fsearchbox = document.getElementById('searchbox');
+        searchtext = fsearchbox.value;
+        postdata = "q=" + encodeURIComponent(searchtext);
+        csrf = document.frmdummy.csrfmiddlewaretoken.value;
+  	postdata = postdata + "&csrfmiddlewaretoken=" + csrf;
+        var xmlhttp;
+	if (window.XMLHttpRequest){
+	xmlhttp=new XMLHttpRequest();
+	}
+	else{
+	xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+	}
+	// Register the handler
+	xmlhttp.onreadystatechange = function(){
+	if(xmlhttp.readyState == 4 && xmlhttp.status==200){
+	    // Display an area with the editable fields...
+	    feedsarea = document.getElementById('feeds');
+            feedsarea.innerHTML = "";
+            responseobj = JSON.parse(xmlhttp.responseText);
+            if(responseobj.hasOwnProperty('error') && responseobj.error != ""){
+		feedsarea.innerHTML = "<p style='color:#DD0000;text-align:center;'>" + responseobj.error + "</p>";
+	    }
+	    else{
+		if(responseobj.hasOwnProperty('feedslist')){
+                    showsearcharea(feedsarea, responseobj.feedslist);
+		}
+		else{
+		    feedsarea.innerHTML = "<p style='color:#DD0000;text-align:center;'>Could not find any feeds in the response</p>";
+		}
+	    }
+	}
+	};
+	xmlhttp.open("POST", "/feedman/searchfeeds/", true);
+	xmlhttp.setRequestHeader("X-CSRFToken", csrf);
+	xmlhttp.send(postdata);
+    }
+
+    function showsearcharea(feedsarea, feedslist){
+	feedsarea.innerHTML = "";
+  	if(feedslist.length == 0){
+	    feedsarea.innerHTML = "No feeds matched your search";
+	    return(0);
+	}
+	searchcontent = "<thead><tr><th class='border-top-0' style='white-space:nowrap;'>ID</th><th class='border-top-0' style='white-space:nowrap;'>Title</th><th class='border-top-0' style='white-space:nowrap;'>Player #1</th><th class='border-top-0' style='white-space:nowrap;'>Player #2</th><th class='border-top-0' style='white-space:nowrap;'>Match Date</th><th class='border-top-0' style='white-space:nowrap;'>Type</th><th class='border-top-0' style='white-space:nowrap;'>Result</th><th class='border-top-0' style='white-space:nowrap;'><input type='checkbox' name='chk_all' id='chk_all' value='1' onclick='javascript:changeall();'>&nbsp;Actions</th></tr></thead>";
+	searchcontent += "<tbody>";
+	for(var fi=0; fi < feedslist.length; fi++){
+	    feed = feedslist[fi];
+	    searchcontent += "<tr><td style='white-space:nowrap;'>" + feed.fid + "</td><td style='white-space:nowrap;'>" + feed.title + "</td><td style='white-space:nowrap;'>" + feed.player1 + "</td><td style='white-space:nowrap;'>" + feed.player2 + "</td><td style='white-space:nowrap;'>" + feed.matchdate + "</td><td style='white-space:nowrap;'>" + feed.matchtype + "</td><td style='white-space:nowrap;'>" + feed.result + "</td><td style='white-space:nowrap;'><input type='checkbox' name='chk_" + feed.fid + "' id='chk_" + feed.fid + "' value='" + feed.fid + "'>&nbsp;&nbsp;<a href='#' onclick='javascript:editfeed(" + feed.fid + ");'><img src='/static/images/editicon.png'></a>&nbsp;&nbsp;<a href='#' onclick='javascript:deletefeed(" + feed.fid + ");'><img src='/static/images/deleteicon.png'></a></td></tr>";
+	}
+	searchcontent += "</tbody>";
+	feedsarea.innerHTML = searchcontent;
+	return(1); // The return value is not relevant, though.
+    }
     </script>
 </head>
 
@@ -408,6 +463,13 @@
                 <div class="row align-items-center">
                     <div class="col-md-6 col-8 align-self-center">
                         <h3 class="page-title mb-0 p-0">{{pagetitle}}</h3>
+			<div class="input-group rounded">
+			  <input type="search" class="form-control rounded" placeholder="Search By Title" aria-label="Search" aria-describedby="search-addon" id="searchbox" />
+			  <span class="input-group-text border-0" id="search-addon" onclick="javascript:searchtitles();">
+			    <i class="fas fa-search"></i>
+			  </span>
+			  <span id="waiting" style="display:none;"></span>
+			</div>
                         <div class="d-flex align-items-center">
                             <nav aria-label="breadcrumb">
                                 <ol class="breadcrumb">
@@ -448,27 +510,27 @@
                                     <table class="table user-table" id='feeds'>
                                         <thead>
                                             <tr>
-                                                <th class="border-top-0">ID</th>
-                                                <th class="border-top-0">Title</th>
-                                                <th class="border-top-0">Player #1</th>
-                                                <th class="border-top-0">Player #2</th>
-						<th class="border-top-0">Match Date</th>
-						<th class="border-top-0">Type</th>
-						<th class="border-top-0">Result</th>
-						<th class="border-top-0"><input type='checkbox' name='chk_all' id='chk_all' value="1" onclick="javascript:changeall();">&nbsp;Actions</th>
+                                                <th class="border-top-0" style="white-space:nowrap;">ID</th>
+                                                <th class="border-top-0" style="white-space:nowrap;">Title</th>
+                                                <th class="border-top-0" style="white-space:nowrap;">Player #1</th>
+                                                <th class="border-top-0" style="white-space:nowrap;">Player #2</th>
+						<th class="border-top-0" style="white-space:nowrap;">Match Date</th>
+						<th class="border-top-0" style="white-space:nowrap;">Type</th>
+						<th class="border-top-0" style="white-space:nowrap;">Result</th>
+						<th class="border-top-0" style="white-space:nowrap;"><input type='checkbox' name='chk_all' id='chk_all' value="1" onclick="javascript:changeall();">&nbsp;Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
 					    {% for feed in feedslist %}
                                             <tr>
-                                                <td>{{feed.fid}}</td>
-                                                <td>{{feed.title}}</td>
-                                                <td>{{feed.player1}}</td>
-                                                <td>{{feed.player2}}</td>
-						<td>{{feed.matchdate}}</td>
-						<td>{{feed.matchtype}}</td>
-						<td>{{feed.result}}</td>
-						<td><input type='checkbox' name='chk_{{feed.fid}}' id='chk_{{feed.fid}}' value="{{feed.fid}}">&nbsp;&nbsp;<a href="#" onclick="javascript:editfeed({{feed.fid}});"><img src="/static/images/editicon.png"></a>&nbsp;&nbsp;<a href="#" onclick="javascript:deletefeed({{feed.fid}});"><img src="/static/images/deleteicon.png"></a></td>
+                                                <td style="white-space:nowrap;">{{feed.fid}}</td>
+                                                <td style="white-space:nowrap;">{{feed.title}}</td>
+                                                <td style="white-space:nowrap;">{{feed.player1}}</td>
+                                                <td style="white-space:nowrap;">{{feed.player2}}</td>
+						<td style="white-space:nowrap;">{{feed.matchdate}}</td>
+						<td style="white-space:nowrap;">{{feed.matchtype}}</td>
+						<td style="white-space:nowrap;">{{feed.result}}</td>
+						<td style="white-space:nowrap;"><input type='checkbox' name='chk_{{feed.fid}}' id='chk_{{feed.fid}}' value="{{feed.fid}}">&nbsp;&nbsp;<a href="#" onclick="javascript:editfeed({{feed.fid}});"><img src="/static/images/editicon.png"></a>&nbsp;&nbsp;<a href="#" onclick="javascript:deletefeed({{feed.fid}});"><img src="/static/images/deleteicon.png"></a></td>
                                             </tr>
 					    {% endfor %}
                                             {% if feedslist|length == 0 %}

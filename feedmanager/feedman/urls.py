@@ -10,7 +10,7 @@ urlpatterns = [
     path('editfeed/', views.editfeed, name='editfeed'),
     path('deletefeed/', views.deletefeed, name='deletefeed'),
     path('savefeed/', views.savefeed, name='savefeed'),
-    path('searchfeed/', views.searchfeed, name='searchfeed'),
+    path('searchfeeds/', views.searchfeeds, name='searchfeeds'),
     path('settings/', views.feedsettings, name='feedsettings'),
     path('sendmail/', views.sendmail, name='sendmail'),
 ]

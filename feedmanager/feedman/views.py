@@ -34,7 +34,13 @@ def listfeeds(request):
     context['username'] = username
     context['pagetitle'] = "Feeds List"
     feedslist = []
-    allfeedsqset = Feed.objects.filter(deleted=False)
+    chunksize = int(settings.CHUNKSIZE)
+    page = 1
+    if 'page' in request.GET.keys():
+        page = int(request.GET['page'])
+    startid = page * chunksize - chunksize
+    endid = page * chunksize
+    allfeedsqset = Feed.objects.filter(deleted=False).order_by('-id')[startid:endid]
     for feedobj in allfeedsqset:
         d = {}
         d['title'] = feedobj.feedtitle
@@ -47,6 +53,13 @@ def listfeeds(request):
         d['status'] = feedobj.feedstatus # If this is a live event, we display it in green.
         feedslist.append(d)
     context['feedslist'] = feedslist
+    nextpage = page + 1
+    prevpage = page - 1
+    context['nextpage'] = nextpage
+    context['prevpage'] = prevpage
+    context['showpagination'] = 0
+    if page > 1 and allfeedsqset.__len__() >= chunksize:
+        context['showpagination'] = 1
     template = loader.get_template('feedslisting.html')
     return HttpResponse(template.render(context, request))
 
@@ -218,7 +231,7 @@ def searchfeed(request):
 
 @login_required(login_url='/feedauth/showlogin/')
 @csrf_protect
-def settings(request):
+def feedsettings(request):
     pass
 
 

@@ -11,7 +11,7 @@ urlpatterns = [
     path('deletefeed/', views.deletefeed, name='deletefeed'),
     path('savefeed/', views.savefeed, name='savefeed'),
     path('searchfeed/', views.searchfeed, name='searchfeed'),
-    path('settings/', views.settings, name='settings'),
+    path('settings/', views.feedsettings, name='feedsettings'),
     path('sendmail/', views.sendmail, name='sendmail'),
 ]
 

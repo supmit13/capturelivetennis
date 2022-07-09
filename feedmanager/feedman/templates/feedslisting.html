@@ -47,6 +47,10 @@
     }
 
     function deletefeed(feedid){
+        yn = confirm("Are you sure you need to delete this feed?");
+        if(!yn){
+	    return(0);
+	}
         postdata = "feedid=" + feedid;
         csrf = document.frmdummy.csrfmiddlewaretoken.value;
   	postdata = postdata + "&csrfmiddlewaretoken=" + csrf;
@@ -71,6 +75,10 @@
 
 
     function savefeed(){
+	yn = confirm("Save changes?");
+ 	if(!yn){
+	    return(0);
+	}
 	csrf = document.frmdummy.csrfmiddlewaretoken.value;
 	ffid = document.frmdummy.feedid.value;
 	//alert(ffid);
@@ -469,6 +477,14 @@
                                         </tbody>
                                     </table>
                                 </form></div>
+				{% if showpagination == 1 %}
+				<div class="text-xs-center">
+				    <ul class="pagination">
+					<li><a href="?page={{prevpage}}" data-original-title="" title="">Prev</a></li> |||
+					<li><a href="?page={{nextpage}}" data-original-title="" title="">Next</a></li> 
+				    </ul>
+				</div>
+				{% endif %}
                             </div>
                         </div>
                     </div>

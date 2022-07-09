@@ -17,6 +17,9 @@ import cv2
 from multiprocessing import Process, Pool, Queue
 import multiprocessing as mp
 from threading import Thread
+import pymysql
+pymysql.install_as_MySQLdb()
+import MySQLdb
 
 
 
@@ -124,7 +127,7 @@ class VideoBot(object):
         self.chunk_size = 1024
         self.time_limit = 86400 # time in seconds (1 day), for recording. Event will end before this, and we need to be able to recognize it.
         mgr = mp.Manager()
-        self.processq = mgr.Queue(maxsize=100000)
+        self.processq = mgr.Queue(maxsize=10000)
         self.size = (320, 180)
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
         # itftennis streams have a rate of 25 fps.
@@ -149,7 +152,8 @@ class VideoBot(object):
                     sys.exit()
         except:
             print ("Error: %s"%sys.exc_info()[1].__str__())
-            sys.exit()
+            #sys.exit()
+            return []
         self.currentPageContent = self.__class__._decodeGzippedContent(self.getPageContent())
         livestreamurls = []
         if self.nolivestreamtext in self.currentPageContent:
@@ -283,27 +287,27 @@ class VideoBot(object):
     def capturelivestream_cv2_q(self, argslist):
         streamurl, outnum = argslist[0], argslist[1]
         cap = cv2.VideoCapture(streamurl)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 2) # With limited buffer size, we can expect to have the latest frame while reading.
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 200) # With limited buffer size, we can expect to have the latest frame while reading.
         # check the incoming frame rate if we are in DEBUG mode
         if self.DEBUG:
             fps_in = cap.get(cv2.CAP_PROP_FPS)
             print("Incoming frame rate: %s"%fps_in)
-        cap.set(cv2.CAP_PROP_FPS, 20) # Should we alter the frames rate and set it to 20 fps?
-        while(True):
+        #cap.set(cv2.CAP_PROP_FPS, 20) # Should we alter the frames rate and set it to 20 fps?
+        while True:
             if cap.isOpened():
                 ret, frame = cap.read()
-                if ret==True:
+                if ret == True:
                     self.processq.put([outnum, frame])
-                    #if cv2.waitKey(1) & 0xFF == ord('q'):
-                    #break
-                    time.sleep(self.FPS)
+                    if self.DEBUG:
+                        self.show_frame(frame)
+                    #time.sleep(self.FPS)
                 else:
                     pass
             else: # Check if the streamurl is still having the feed
                 retval = self.verifystream(streamurl)
                 if retval: # retval is True, so reconnect to the stream...
                     cap = cv2.VideoCapture(streamurl)
-                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 200)
                     if self.DEBUG: # Check incoming frame rate if DEBUG mode is set
                         fps_in = cap.get(cv2.CAP_PROP_FPS)
                         print("Incoming frame rate: %s"%fps_in)
@@ -311,7 +315,8 @@ class VideoBot(object):
                     print("Stream %s is no longer available."%streamurl)
                     break
         cap.release() # Done!
-        #cv2.destroyAllWindows()
+        if self.DEBUG:
+            cv2.destroyAllWindows()
 
     
     def framewriter(self, outlist):
@@ -366,6 +371,100 @@ class VideoBot(object):
         return streamurl
 
 
+    def getfeedmetadata(self, pageurl):
+        """
+        Returns the following metadata as a dict:
+        FeedTitle, FeedEventTeam1 (name of participating player(s) separated by commas),
+        FeedEventTeam2 (name of participating player(s) separated by commas), FeedStartTime,
+        FeedEndTime (both datetime values), FeedEventType (MEN - Singles, WOMEN - Doubles, etc),
+        FeedEventResult (name of team that won, both teams in case of tie), FeedStatus
+        (live or past, default is live), FeedDeleted (True if deleted, False if not, default
+        is False), FeedPath (location/path of feed on the disk), FeedUpdated (datetime val),
+        FeedUpdatedUser (User who last updated the feed, default is 0).
+        """
+        metadata = {}
+        pagerequest = urllib.request.Request(pageurl, headers=self.httpHeaders)
+        try:
+            pageresponse = self.opener.open(pagerequest)
+            headers = pageresponse.getheaders()
+            #print(headers)
+            if "Location" in headers:
+                requesturl = headers["Location"]
+                pagerequest = urllib.request.Request(requesturl, headers=self.httpHeaders)
+                try:
+                    pageresponse = self.no_redirect_opener.open(pagerequest)
+                except:
+                    print ("Error. %s"%sys.exc_info()[1].__str__())
+                    #sys.exit()
+                    return {}
+        except:
+            print ("Error: %s"%sys.exc_info()[1].__str__())
+            #sys.exit()
+            return {}
+        streampagecontent = self.__class__._decodeGzippedContent(pageresponse.read())
+        soup = BeautifulSoup(streampagecontent, features="html.parser")
+        # TODO: Extract information about the feed...
+        htmltagPattern = re.compile("<\/?[^>]+>", re.DOTALL)
+        beginspacePattern = re.compile("^\s+")
+        endspacePattern = re.compile("\s+$")
+        eventtitle, team1, team2, eventtype, startdate, enddate, eventstatus, deleted = "", "", "", "", "", "", "live", 0
+        subtitlespan = soup.find("span", {'class' : 'sub_title'})
+        if subtitlespan is not None:
+            eventtype = subtitlespan.renderContents().decode('utf-8')
+            eventtype = eventtype.replace("\n", "").replace("\r", "")
+            eventtype = htmltagPattern.sub("", eventtype)
+            eventtype = beginspacePattern.sub("", eventtype)
+            eventtype = endspacePattern.sub("", eventtype)
+        h1tags = soup.find_all("h1")
+        if h1tags.__len__() > 0:
+            eventtitle = h1tags[0].renderContents().decode('utf-8')
+            eventtitle = eventtitle.replace("\n", "").replace("\r", "")
+            eventtitle = htmltagPattern.sub("", eventtitle)
+            eventtitle = beginspacePattern.sub("", eventtitle)
+            eventtitle = endspacePattern.sub("", eventtitle)
+        datetimediv = soup.find("div", {'class' : 'video_date'})
+        if datetimediv is not None:
+            datetimecontents = datetimediv.renderContents().decode('utf-8')
+            datetimecontents = datetimecontents.replace("\n", "").replace("\r", "")
+            datePattern = re.compile("(\d{4}\-\d{1,2}\-\d{1,2})\s+starts\s+at\s+(\d{1,2}\:?\d{0,2})", re.IGNORECASE|re.DOTALL)
+            dps = re.search(datePattern, datetimecontents)
+            if dps:
+                datestr = dps.groups()[0]
+                timestr = dps.groups()[1]
+                if ":" not in timestr:
+                    timestr += ":00:00"
+                else:
+                    timestr += ":00"
+                dtstr = datestr + " " + timestr
+                dtstr = htmltagPattern.sub("", dtstr)
+                dtstr = beginspacePattern.sub("", dtstr)
+                dtstr = endspacePattern.sub("", dtstr)
+                startdate = datetime.datetime.strptime(dtstr, "%Y-%m-%d %H:%M:%S")
+            else:
+                startdate = datetime.datetime.now()
+        else:
+            startdate = datetime.datetime.now()
+        playersspans = soup.find_all("span", {'class' : 'player'})
+        if playersspans.__len__() > 0:
+            team1 = playersspans[0].renderContents().decode('utf-8')
+            team1 = team1.replace("\n", "").replace("\r", "")
+            team1 = htmltagPattern.sub("", team1)
+            team1 = beginspacePattern.sub("", team1)
+            team1 = endspacePattern.sub("", team1)
+        if playersspans.__len__() > 1:
+            team2 = playersspans[1].renderContents().decode('utf-8')
+            team2 = team2.replace("\n", "").replace("\r", "")
+            team2 = htmltagPattern.sub("", team2)
+            team2 = beginspacePattern.sub("", team2)
+            team2 = endspacePattern.sub("", team2)
+        metadata['FeedTitle'] = eventtitle
+        metadata['FeedEventTeam1'] = team1
+        metadata['FeedEventTeam2'] = team2
+        metadata['FeedStartTime'] = startdate
+        metadata['FeedEventType'] = eventtype
+        return metadata
+
+
 if __name__ == "__main__":
     if sys.argv.__len__() < 2:
         print("Insufficient parameters")
@@ -376,6 +475,9 @@ if __name__ == "__main__":
     t = Thread(target=itftennis.framewriter, args=(outlist,))
     t.daemon = True
     t.start()
+    # Create a database connection and as associated cursor object. We will handle database operations from main thread only.
+    dbconn = MySQLdb.connect(host="localhost", user="feeduser", passwd="feedpasswd", db="feeddb")
+    cursor = dbconn.cursor()
     while True:
         streampageurls = itftennis.checkforlivestream()
         if streampageurls.__len__() > 0:
@@ -387,19 +489,30 @@ if __name__ == "__main__":
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
                     outfilename = time.strftime("/home/supmit/work/capturelivefeed/tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
-                    out = cv2.VideoWriter(outfilename, itftennis.fourcc, 20.0, itftennis.size)
+                    out = cv2.VideoWriter(outfilename, itftennis.fourcc, 1/itftennis.FPS, itftennis.size)
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
                     #print(outnum)
                     argslist.append([streamurl, outnum])
+                    # Now, get feed metadata...
+                    metadata = itftennis.getfeedmetadata(streampageurl)
+                    # Save metadata in DB
+                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('%s', '%s', '%s', '%s', null, '%s', 'live', '%s', FALSE, '%s', 1)"%(metadata['FeedTitle'], metadata['FeedEventTeam1'], metadata['FeedEventTeam2'], metadata['FeedStartTime'], metadata['FeedEventType'], outfilename, datetime.datetime.now()) # The supplied user Id value of 1 is reserved for this script.
+                    try:
+                        cursor.execute(feedinsertsql)
+                        dbconn.commit() # Just in case autocommit is not set.
+                    except:
+                        print("Error in data insertion to DB: %s\nErroneous SQL: %s"%(sys.exc_info()[1].__str__(), feedinsertsql))
                 else:
                     print("Couldn't get the stream url from page")
+                if itftennis.DEBUG: # Let only a single stream be processed for debugging.
+                    break
             p.map(itftennis.capturelivestream_cv2_q, argslist)
-            #p.map(itftennis.capturelivestream_cv2, argslist)
         time.sleep(itftennis.livestreamcheckinterval)
     t.join()
     for out in outlist:
         out.release()
+    dbconn.close() # Close and keep environment clean.
 
 
 # How to run: python getlivestream.py https://live.itftennis.com/en/live-streams/

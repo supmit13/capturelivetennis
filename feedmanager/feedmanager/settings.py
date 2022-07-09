@@ -137,6 +137,8 @@ STATICFILES_DIRS = (
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+CHUNKSIZE = 20 # Number of feeds to display per page.
+
 
 
 

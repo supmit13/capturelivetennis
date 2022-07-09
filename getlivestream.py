@@ -134,6 +134,11 @@ class VideoBot(object):
         self.FPS = 1/25 # This is the delay that would be applied after every read(). This would 'normalize' the frame rate and handle frame loss jitters.
         self.FPS_MS = int(self.FPS * 1000) # Same delay as above, in milliseconds.
         self.DEBUG = 1 # TODO: Remember to set it to 0 (or False) before deploying somewhere.
+        self.dbuser = "feeduser"
+        self.dbpasswd = "feedpasswd"
+        self.dbname = "feeddb"
+        self.dbhost = "localhost"
+        self.dbport = 3306
         
 
     def checkforlivestream(self):
@@ -285,9 +290,9 @@ class VideoBot(object):
 
 
     def capturelivestream_cv2_q(self, argslist):
-        streamurl, outnum = argslist[0], argslist[1]
+        streamurl, outnum, feedid = argslist[0], argslist[1], argslist[2]
         cap = cv2.VideoCapture(streamurl)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 200) # With limited buffer size, we can expect to have the latest frame while reading.
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 250)
         # check the incoming frame rate if we are in DEBUG mode
         if self.DEBUG:
             fps_in = cap.get(cv2.CAP_PROP_FPS)
@@ -307,13 +312,25 @@ class VideoBot(object):
                 retval = self.verifystream(streamurl)
                 if retval: # retval is True, so reconnect to the stream...
                     cap = cv2.VideoCapture(streamurl)
-                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 200)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 250)
                     if self.DEBUG: # Check incoming frame rate if DEBUG mode is set
                         fps_in = cap.get(cv2.CAP_PROP_FPS)
                         print("Incoming frame rate: %s"%fps_in)
-                else: # Stream is not available anymore
+                else: # Stream is not available anymore, so update feed record in DB
                     print("Stream %s is no longer available."%streamurl)
-                    break
+                    curdatetime = datetime.datetime.now()
+                    pdbconn = MySQLdb.connect(host=self.dbhost, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
+                    pcursor = pdbconn.cursor()
+                    updatesql = "update feedman_feeds set feedend='%s' where id=%s"%(curdatetime, feedid)
+                    if self.DEBUG:
+                        print(updatesql)
+                    try:
+                        pcursor.execute(updatesql)
+                        pdbconn.commit()
+                    except:
+                        print("Could not update db for the feed identified by Id %s"%feedid)
+                    pdbconn.close()
+                    break # Break out of infinite loop.
         cap.release() # Done!
         if self.DEBUG:
             cv2.destroyAllWindows()
@@ -395,15 +412,12 @@ class VideoBot(object):
                     pageresponse = self.no_redirect_opener.open(pagerequest)
                 except:
                     print ("Error. %s"%sys.exc_info()[1].__str__())
-                    #sys.exit()
-                    return {}
+                    return {'FeedTitle' : '', 'FeedEventTeam1' : '', 'FeedEventTeam2' : '', 'FeedStartTime' : '', 'FeedEventType' : ''}
         except:
             print ("Error: %s"%sys.exc_info()[1].__str__())
-            #sys.exit()
-            return {}
+            return {'FeedTitle' : '', 'FeedEventTeam1' : '', 'FeedEventTeam2' : '', 'FeedStartTime' : '', 'FeedEventType' : ''}
         streampagecontent = self.__class__._decodeGzippedContent(pageresponse.read())
         soup = BeautifulSoup(streampagecontent, features="html.parser")
-        # TODO: Extract information about the feed...
         htmltagPattern = re.compile("<\/?[^>]+>", re.DOTALL)
         beginspacePattern = re.compile("^\s+")
         endspacePattern = re.compile("\s+$")
@@ -420,6 +434,7 @@ class VideoBot(object):
             eventtitle = h1tags[0].renderContents().decode('utf-8')
             eventtitle = eventtitle.replace("\n", "").replace("\r", "")
             eventtitle = htmltagPattern.sub("", eventtitle)
+            eventtitle = eventtitle.replace("LIVESTREAM:", "")
             eventtitle = beginspacePattern.sub("", eventtitle)
             eventtitle = endspacePattern.sub("", eventtitle)
         datetimediv = soup.find("div", {'class' : 'video_date'})
@@ -476,8 +491,9 @@ if __name__ == "__main__":
     t.daemon = True
     t.start()
     # Create a database connection and as associated cursor object. We will handle database operations from main thread only.
-    dbconn = MySQLdb.connect(host="localhost", user="feeduser", passwd="feedpasswd", db="feeddb")
+    dbconn = MySQLdb.connect(host=itftennis.dbhost, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
     cursor = dbconn.cursor()
+    feedidlist = []
     while True:
         streampageurls = itftennis.checkforlivestream()
         if streampageurls.__len__() > 0:
@@ -493,7 +509,6 @@ if __name__ == "__main__":
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
                     #print(outnum)
-                    argslist.append([streamurl, outnum])
                     # Now, get feed metadata...
                     metadata = itftennis.getfeedmetadata(streampageurl)
                     # Save metadata in DB
@@ -503,6 +518,16 @@ if __name__ == "__main__":
                         dbconn.commit() # Just in case autocommit is not set.
                     except:
                         print("Error in data insertion to DB: %s\nErroneous SQL: %s"%(sys.exc_info()[1].__str__(), feedinsertsql))
+                    try:
+                        # Get the Id of the inserted feed
+                        feedid = -1
+                        feedidsql = "select max(id) from feedman_feeds"
+                        cursor.execute(feedidsql)
+                        feedrecs = cursor.fetchall()
+                        feedid = int(feedrecs[0][0])
+                    except:
+                        pass # Leave it if we can't get it. We can get it from the management interface.
+                    argslist.append([streamurl, outnum, feedid])   
                 else:
                     print("Couldn't get the stream url from page")
                 #if itftennis.DEBUG: # Let only a single stream be processed for debugging.

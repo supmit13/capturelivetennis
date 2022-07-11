@@ -295,6 +295,10 @@
     }
 
     function deleteselected(){
+	yn = confirm("Delete selected feeds?");
+	if(!yn){
+	    return(0);
+	}
 	chkpattern = /^chk_(?<fid>\d+)$/;
 	allelements = document.frmdummy.elements;
 	feedids = "";
@@ -404,8 +408,8 @@
                         <li class="nav-item search-box">
                             <a class="nav-link text-muted" href="javascript:void(0)"><i class="ti-search"></i></a>
                             <form class="app-search" style="display: none;">
-                                <input type="text" class="form-control" placeholder="Search &amp; enter"> <a
-                                    class="srh-btn"><i class="ti-close"></i></a> </form>
+                                <input type="text" class="form-control" placeholder="Search"> <a
+                                    class="srh-btn" href="#/" onclick="javascript:searchtitles();"><i class="ti-close"></i></a> </form>
                         </li>
                     </ul>
 
@@ -594,7 +598,10 @@
 		    {% if showpagination == 1 %}
 			<div class="text-xs-center" id='paginationdiv' style="text-align:center;">
 			    <ul class="pagination">
-				<li><a href="?page={{prevpage}}" data-original-title="" title="">Prev</a></li> |||
+				{% if prevpage >= 1 %}
+				<li><a href="?page={{prevpage}}" data-original-title="" title="">Prev</a></li>
+				|||
+				{% endif %}
 				<li><a href="?page={{nextpage}}" data-original-title="" title="">Next</a></li> 
 			    </ul>
 			</div>

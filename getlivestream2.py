@@ -14,6 +14,8 @@ from urllib.parse import urlencode, quote_plus, urlparse
 import html
 import numpy as np
 import cv2
+import pyaudio
+import wave
 from multiprocessing import Process, Pool, Queue
 import multiprocessing as mp
 from threading import Thread
@@ -128,13 +130,17 @@ class VideoBot(object):
         self.livestreamcheckinterval = 10 # 10 seconds.
         self.chunk_size = 1024
         self.time_limit = 86400 # time in seconds (1 day), for recording. Event will end before this, and we need to be able to recognize it.
-        mgr = mp.Manager()
-        self.processq = mgr.Queue(maxsize=10000)
         self.size = (320, 180)
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
         # itftennis streams have a rate of 25 fps.
         self.FPS = 1/25 # This is the delay that would be applied after every read(). This would 'normalize' the frame rate and handle frame loss jitters.
         self.FPS_MS = int(self.FPS * 1000) # Same delay as above, in milliseconds.
+        # Audio parameters:
+        self.rate = 44100
+        self.frames_per_buffer = 1024
+        self.channels = 2
+        self.format = pyaudio.paInt16
+        # Other params
         self.DEBUG = 1 # TODO: Remember to set it to 0 (or False) before deploying somewhere.
         self.dbuser = "feeduser"
         self.dbpasswd = "feedpasswd"
@@ -243,26 +249,6 @@ class VideoBot(object):
         return True
 
 
-    def capturelivestream(self, argslist):
-        streamurl, outfilename = argslist[0], argslist[1]
-        print("Capturing stream...")
-        file_handle = open(outfilename, 'wb')
-        start_time_in_seconds = time.time()
-        time_elapsed = 0
-        with requests.Session() as session:
-            response = session.get(streamurl, stream=True)
-            for chunk in response.iter_content(chunk_size=self.chunk_size):
-                if time_elapsed > self.time_limit:
-                    break
-                # to print time elapsed   
-                if int(time.time() - start_time_in_seconds)- time_elapsed > 0 :
-                    time_elapsed = int(time.time() - start_time_in_seconds)
-                    print(time_elapsed, end='\r', flush=True)
-                if chunk:
-                    file_handle.write(chunk)
-        file_handle.close()
-
-
     def capturelivestream_cv2(self, argslist):
         streamurl, outfilename = argslist[0], argslist[1]
         cap = cv2.VideoCapture(streamurl)
@@ -291,41 +277,63 @@ class VideoBot(object):
         cv2.destroyAllWindows()
 
 
-    def capturelivestream_cv2_q(self, argslist):
-        streamurl, outfilename, feedid = argslist[0], argslist[1], argslist[2]
+    def capturelivestream(self, streamurl, outfilename, feedid):
         cap = cv2.VideoCapture(streamurl)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 250)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
         # check the incoming frame rate if we are in DEBUG mode
         if self.DEBUG:
             fps_in = cap.get(cv2.CAP_PROP_FPS)
             print("Incoming frame rate: %s"%fps_in)
         #cap.set(cv2.CAP_PROP_FPS, 20) # Should we alter the frames rate and set it to 20 fps?
         out = cv2.VideoWriter(outfilename, self.fourcc, 1/self.FPS, self.size)
+        # Get audio stream
+        """
+        audio = pyaudio.PyAudio()
+        stream = audio.open(format=self.format, channels=self.channels, rate=self.rate, input=True, frames_per_buffer=self.frames_per_buffer)
+        audio_frames = []
+        stream.start_stream()
+        """
+        lastcaptured = time.time()
         while True:
             if cap.isOpened():
                 ret, frame = cap.read()
                 if ret == True:
                     out.write(frame)
-                    if self.DEBUG == 2:
-                        print("Put a frame in queue for out writer %s"%outnum)
-                    #    self.show_frame(frame)
+                    lastcaptured = time.time()
+                    self.show_frame(frame)
+                    # Read audio
+                    """
+                    audiodata = stream.read(self.frames_per_buffer)
+                    audio_frames.append(audiodata)
+                    """
                     time.sleep(self.FPS)
                 else:
-                    pass
+                    if self.DEBUG:
+                        print("Could not read frame for feed ID %s"%feedid)
+                    t = time.time()
+                    if t - lastcaptured > 5: # If the frames can't be read for more than 5 seconds, reopen the stream
+                        print("Reopening feed identified by feed ID %s"%feedid)
+                        cap.release()
+                        cap = cv2.VideoCapture(streamurl)
+                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
+                    continue
             else: # Check if the streamurl is still having the feed
+                if self.DEBUG:
+                    print("Feed identified by ID %s has closed. Verifying availability of feed.")
                 retval = self.verifystream(streamurl)
                 if retval: # retval is True, so reconnect to the stream...
+                    cap.release() # Release the previous cap
                     cap = cv2.VideoCapture(streamurl)
-                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 250)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
                     if self.DEBUG: # Check incoming frame rate if DEBUG mode is set
                         fps_in = cap.get(cv2.CAP_PROP_FPS)
-                        print("Incoming frame rate: %s"%fps_in)
+                        print("Feed %s reconnected. Incoming frame rate: %s"%(feedid, fps_in))
                 else: # Stream is not available anymore, so update feed record in DB
-                    print("Stream %s is no longer available."%streamurl)
+                    print("Feed %s is no longer available."%feedid)
                     curdatetime = datetime.datetime.now()
                     pdbconn = MySQLdb.connect(host=self.dbhost, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
                     pcursor = pdbconn.cursor()
-                    updatesql = "update feedman_feeds set feedend='%s' where id=%s"%(curdatetime, feedid)
+                    updatesql = "update feedman_feeds set feedend='%s', feedstatus='past' where id=%s"%(curdatetime, feedid)
                     if self.DEBUG:
                         print(updatesql)
                     try:
@@ -336,42 +344,33 @@ class VideoBot(object):
                     pdbconn.close()
                     break # Break out of infinite loop.
         out.release()
-        cap.release() # Done!
+        cap.release() # Done with video!
+        # End audio stream
+        """
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
+        # Write audio file
+        fpath = os.path.dirname(outfilename)
+        fnamefext = os.path.basename(outfilename)
+        fname = fnamefext.split(".")[0]
+        audiofile = fpath + os.path.sep + fname + ".wav"
+        combinedfile = fpath + os.path.sep + fname + "_combined.avi"
+        if self.DEBUG:
+            print("Audio file is %s"%audiofile)
+        waveFile = wave.open(audiofile, 'wb')
+        waveFile.setnchannels(self.channels)
+        waveFile.setsampwidth(audio.get_sample_size(self.format))
+        waveFile.setframerate(self.rate)
+        waveFile.writeframes(b''.join(audio_frames))
+        waveFile.close()
+        print("Normal recording\nMuxing")
+        cmd = "ffmpeg -y -ac 2 -channel_layout stereo -i %s -i %s -pix_fmt yuv420p %s"%(audiofile, outfilename, combinedfile)
+        subprocess.call(cmd, shell=True)
+        print("..")
+        """
         if self.DEBUG:
             cv2.destroyAllWindows()
-
-    
-    def framewriter(self, outlist):
-        isempty = False
-        endofrun = False
-        while True:
-            frame = None
-            args = self.processq.get()
-            outnum = args[0]
-            frame = args[1]
-            if outlist.__len__() > outnum:
-                out = outlist[outnum]
-            else:
-                if self.DEBUG == 2:
-                    print("Could not get writer %s"%outnum)
-                continue
-            if frame is not None and out.isOpened():
-                out.write(frame)
-                #print("Wrote a frame to %s..."%outnum)
-                isempty = False
-                endofrun = False
-            else:
-                if self.processq.empty() and not isempty:
-                    isempty = True
-                elif self.processq.empty() and isempty: # processq queue is empty now and was empty last time
-                    print("processq is empty")
-                    time.sleep(10) # Sleep for 10 secs.
-                    endofrun = True
-                elif endofrun and isempty:
-                    print("Could not find any frames to process. Quitting")
-                    break
-        print("Done writing feeds. Quitting.")
-        return None
 
 
     def show_frame(self, frame):
@@ -494,21 +493,26 @@ if __name__ == "__main__":
         sys.exit()
     siteurl = sys.argv[1]
     itftennis = VideoBot(siteurl)
-    #outlist = []
-    #t = Thread(target=itftennis.framewriter, args=(outlist,))
-    #t.daemon = True
-    #t.start()
     # Create a database connection and as associated cursor object. We will handle database operations from main thread only.
     dbconn = MySQLdb.connect(host=itftennis.dbhost, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
     cursor = dbconn.cursor()
-    feedidlist = []
+    threadsque = []
+    vidsdict = {}
+    streampattern = re.compile("\?vid=(\d+)$")
     while True:
         streampageurls = itftennis.checkforlivestream()
         if streampageurls.__len__() > 0:
-            print("Detected %s new live stream(s)... Getting them."%streampageurls.__len__())
-            p = Pool(streampageurls.__len__())
-            argslist = []
             for streampageurl in streampageurls:
+                sps = re.search(streampattern, streampageurl)
+                if sps:
+                    streamnum = sps.groups()[0]
+                    if streamnum not in vidsdict.keys(): # Check if this stream has already been processed.
+                        vidsdict[streamnum] = 1
+                    else:
+                        continue
+                else:
+                    continue
+                print("Detected new live stream... Getting it.")
                 streamurl = itftennis.getstreamurlfrompage(streampageurl)
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
@@ -522,27 +526,26 @@ if __name__ == "__main__":
                         dbconn.commit() # Just in case autocommit is not set.
                     except:
                         print("Error in data insertion to DB: %s\nErroneous SQL: %s"%(sys.exc_info()[1].__str__(), feedinsertsql))
+                    feedid = -1
                     try:
                         # Get the Id of the inserted feed
-                        feedid = -1
                         feedidsql = "select max(id) from feedman_feeds"
                         cursor.execute(feedidsql)
                         feedrecs = cursor.fetchall()
                         feedid = int(feedrecs[0][0])
                     except:
                         pass # Leave it if we can't get it. We can get it from the management interface.
-                    argslist.append([streamurl, outfilename, feedid])   
+                    argslist = [streamurl, outfilename, feedid]
+                    t = Thread(target=itftennis.capturelivestream, args=(streamurl, outfilename, feedid))
+                    t.daemon = True
+                    t.start()
+                    threadsque.append(t)
                 else:
                     print("Couldn't get the stream url from page")
-                #if itftennis.DEBUG: # Let only a single stream be processed for debugging.
-                #    break
-            p.map(itftennis.capturelivestream_cv2_q, argslist)
         time.sleep(itftennis.livestreamcheckinterval)
-    #t.join()
-    #for out in outlist:
-    #    out.release()
     dbconn.close() # Close and keep environment clean.
-
+    for t in threadsque:
+        t.join()
 
 # How to run: python getlivestream.py https://live.itftennis.com/en/live-streams/
 """
@@ -555,6 +558,8 @@ https://stackoverflow.com/questions/55828451/video-streaming-from-ip-camera-in-p
 https://stackoverflow.com/questions/55099413/python-opencv-streaming-from-camera-multithreading-timestamps
 https://stackoverflow.com/questions/58592291/how-to-capture-multiple-camera-streams-with-opencv
 https://www.it-jim.com/blog/practical-aspects-of-real-time-video-pipelines/
+https://stackoverflow.com/questions/14140495/how-to-capture-a-video-and-audio-in-python-from-a-camera-or-webcam
+https://askubuntu.com/questions/557906/problem-starting-jack-server-jack-server-is-not-running-or-cannot-be-started
 """
 # supmit
 

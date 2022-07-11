@@ -38,6 +38,8 @@ def listfeeds(request):
     page = 1
     if 'page' in request.GET.keys():
         page = int(request.GET['page'])
+    if page < 1:
+        page = 1
     startid = page * chunksize - chunksize
     endid = page * chunksize
     allfeedsqset = Feed.objects.filter(deleted=False).order_by('-id')[startid:endid]
@@ -58,7 +60,7 @@ def listfeeds(request):
     context['nextpage'] = nextpage
     context['prevpage'] = prevpage
     context['showpagination'] = 0
-    if page > 1 and allfeedsqset.__len__() >= chunksize:
+    if allfeedsqset.__len__() >= chunksize:
         context['showpagination'] = 1
     template = loader.get_template('feedslisting.html')
     return HttpResponse(template.render(context, request))

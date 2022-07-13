@@ -47,8 +47,8 @@ def listfeeds(request):
         d = {}
         d['title'] = feedobj.feedtitle
         d['fid'] = feedobj.id
-        d['player1'] = feedobj.feedeventteam1.replace(",", "<br/>")
-        d['player2'] = feedobj.feedeventteam2.replace(",", "<br/>")
+        d['player1'] = feedobj.feedeventteam1.replace(",", "\n")
+        d['player2'] = feedobj.feedeventteam2.replace(",", "\n")
         d['matchdate'] = feedobj.feedstart
         d['matchtype'] = feedobj.eventtype
         d['result'] = feedobj.eventresult
@@ -131,7 +131,7 @@ def savefeed(request):
         newrequestdict[newk] = requestdict[k][0].replace('"', "'")
     # Now save the data.
     feedid, feedtitle, feedplayer1, feedplayer2, eventtype, feedpath, feedstart, feedend, deleted, feedresult, feedstatus = -1, "", "", "", "", "", "", "", 0, "", ""
-    print(newrequestdict.keys())
+    #print(newrequestdict.keys())
     if 'feedid' in newrequestdict.keys():
         feedid = newrequestdict['feedid']
     if 'title' in newrequestdict.keys():

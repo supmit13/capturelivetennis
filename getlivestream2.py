@@ -300,7 +300,7 @@ class VideoBot(object):
                 if ret == True:
                     out.write(frame)
                     lastcaptured = time.time()
-                    self.show_frame(frame)
+                    #self.show_frame(frame)
                     # Read audio
                     """
                     audiodata = stream.read(self.frames_per_buffer)
@@ -319,7 +319,7 @@ class VideoBot(object):
                     continue
             else: # Check if the streamurl is still having the feed
                 if self.DEBUG:
-                    print("Feed identified by ID %s has closed. Verifying availability of feed.")
+                    print("Feed identified by ID %s has closed. Verifying availability of feed."%feedid)
                 retval = self.verifystream(streamurl)
                 if retval: # retval is True, so reconnect to the stream...
                     cap.release() # Release the previous cap
@@ -473,12 +473,33 @@ class VideoBot(object):
             team1 = htmltagPattern.sub("", team1)
             team1 = beginspacePattern.sub("", team1)
             team1 = endspacePattern.sub("", team1)
-        if playersspans.__len__() > 1:
-            team2 = playersspans[1].renderContents().decode('utf-8')
+        if playersspans.__len__() > 2:
+            team1_2 = playersspans[1].renderContents().decode('utf-8')
+            team1_2 = team1_2.replace("\n", "").replace("\r", "")
+            team1_2 = htmltagPattern.sub("", team1_2)
+            team1_2 = beginspacePattern.sub("", team1_2)
+            team1_2 = endspacePattern.sub("", team1_2)
+            team1 = team1 + ", " + team1_2
+            team2 = playersspans[2].renderContents().decode('utf-8')
             team2 = team2.replace("\n", "").replace("\r", "")
             team2 = htmltagPattern.sub("", team2)
             team2 = beginspacePattern.sub("", team2)
             team2 = endspacePattern.sub("", team2)
+            if playersspans.__len__() > 3:
+                team2_2 = playersspans[3].renderContents().decode('utf-8')
+                team2_2 = team2_2.replace("\n", "").replace("\r", "")
+                team2_2 = htmltagPattern.sub("", team2_2)
+                team2_2 = beginspacePattern.sub("", team2_2)
+                team2_2 = endspacePattern.sub("", team2_2)
+                team2 = team2 + ", " + team2_2
+        else:
+            team2 = ""
+            if playersspans.__len__() > 1:
+                team2 = playersspans[1].renderContents().decode('utf-8')
+                team2 = team2.replace("\n", "").replace("\r", "")
+                team2 = htmltagPattern.sub("", team2)
+                team2 = beginspacePattern.sub("", team2)
+                team2 = endspacePattern.sub("", team2)
         metadata['FeedTitle'] = eventtitle
         metadata['FeedEventTeam1'] = team1
         metadata['FeedEventTeam2'] = team2
@@ -547,7 +568,7 @@ if __name__ == "__main__":
     for t in threadsque:
         t.join()
 
-# How to run: python getlivestream.py https://live.itftennis.com/en/live-streams/
+# How to run: python getlivestream2.py https://live.itftennis.com/en/live-streams/
 """
 References:
 https://en.wikipedia.org/wiki/Video_compression_picture_types
@@ -560,6 +581,7 @@ https://stackoverflow.com/questions/58592291/how-to-capture-multiple-camera-stre
 https://www.it-jim.com/blog/practical-aspects-of-real-time-video-pipelines/
 https://stackoverflow.com/questions/14140495/how-to-capture-a-video-and-audio-in-python-from-a-camera-or-webcam
 https://askubuntu.com/questions/557906/problem-starting-jack-server-jack-server-is-not-running-or-cannot-be-started
+https://code-maven.com/catch-control-c-in-python
 """
 # supmit
 

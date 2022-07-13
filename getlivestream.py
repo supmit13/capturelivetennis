@@ -6,6 +6,7 @@ import unicodedata
 import io
 import gzip
 import time
+import signal, readchar
 import simplejson as json
 import datetime
 import string
@@ -24,6 +25,8 @@ import MySQLdb
 
 
 
+
+# Basic utility functions and variables
 partialUrlPattern = re.compile("^/\w+")
 
 def decodeHtmlEntities(content):
@@ -31,23 +34,6 @@ def decodeHtmlEntities(content):
     for entity in entitiesDict.keys():
         content = content.replace(entity, entitiesDict[entity])
     return(content)
-
-
-# Implement signal handler for ctrl+c here.
-def setSignal():
-    pass
-
-class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
-    def http_error_302(self, req, fp, code, msg, headers):
-        infourl = urllib.response.addinfourl(fp, headers, req.get_full_url())
-        infourl.status = code
-        infourl.code = code
-        return infourl
-
-    http_error_300 = http_error_302
-    http_error_301 = http_error_302
-    http_error_303 = http_error_302
-    http_error_307 = http_error_302
 
 
 def unicodefraction_to_decimal(v):
@@ -66,7 +52,36 @@ def unicodefraction_to_decimal(v):
         return value
     return v
 
+# Signal handler to handle ctrl+c interrupt
+def handler(signum, frame):
+    msg = "Ctrl-c was pressed. Do you really want to exit? y/n "
+    print(msg, end="", flush=True)
+    res = readchar.readchar()
+    if res == 'y':
+        print("")
+        exit(1)
+    else:
+        print("", end="\r", flush=True)
+        print(" " * len(msg), end="", flush=True) # clear the printed line
+        print("    ", end="\r", flush=True)
+ 
 
+
+# Redirects handler, in case we need to handle HTTP redirects.
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def http_error_302(self, req, fp, code, msg, headers):
+        infourl = urllib.response.addinfourl(fp, headers, req.get_full_url())
+        infourl.status = code
+        infourl.code = code
+        return infourl
+
+    http_error_300 = http_error_302
+    http_error_301 = http_error_302
+    http_error_303 = http_error_302
+    http_error_307 = http_error_302
+
+
+# Class to handle video/audio capture and write to a file on disk. 
 class VideoBot(object):
     htmltagPattern = re.compile("\<\/?[^\<\>]*\/?\>", re.DOTALL)
     pathEndingWithSlashPattern = re.compile(r"\/$")
@@ -146,7 +161,6 @@ class VideoBot(object):
         try:
             self.pageResponse = self.opener.open(self.pageRequest)
             headers = self.pageResponse.getheaders()
-            #print(headers)
             if "Location" in headers:
                 self.requestUrl = headers["Location"]
                 self.pageRequest = urllib.request.Request(self.requestUrl, headers=self.httpHeaders)
@@ -154,10 +168,9 @@ class VideoBot(object):
                     self.pageResponse = self.no_redirect_opener.open(self.pageRequest)
                 except:
                     print ("Error. %s"%sys.exc_info()[1].__str__())
-                    sys.exit()
+                    return []
         except:
             print ("Error: %s"%sys.exc_info()[1].__str__())
-            #sys.exit()
             return []
         self.currentPageContent = self.__class__._decodeGzippedContent(self.getPageContent())
         livestreamurls = []
@@ -241,26 +254,6 @@ class VideoBot(object):
         return True
 
 
-    def capturelivestream(self, argslist):
-        streamurl, outfilename = argslist[0], argslist[1]
-        print("Capturing stream...")
-        file_handle = open(outfilename, 'wb')
-        start_time_in_seconds = time.time()
-        time_elapsed = 0
-        with requests.Session() as session:
-            response = session.get(streamurl, stream=True)
-            for chunk in response.iter_content(chunk_size=self.chunk_size):
-                if time_elapsed > self.time_limit:
-                    break
-                # to print time elapsed   
-                if int(time.time() - start_time_in_seconds)- time_elapsed > 0 :
-                    time_elapsed = int(time.time() - start_time_in_seconds)
-                    print(time_elapsed, end='\r', flush=True)
-                if chunk:
-                    file_handle.write(chunk)
-        file_handle.close()
-
-
     def capturelivestream_cv2(self, argslist):
         streamurl, outfilename = argslist[0], argslist[1]
         cap = cv2.VideoCapture(streamurl)
@@ -289,35 +282,59 @@ class VideoBot(object):
         cv2.destroyAllWindows()
 
 
-    def capturelivestream_cv2_q(self, argslist):
+    def capturelivestream(self, argslist):
         streamurl, outnum, feedid = argslist[0], argslist[1], argslist[2]
         cap = cv2.VideoCapture(streamurl)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 250)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
         # check the incoming frame rate if we are in DEBUG mode
         if self.DEBUG:
             fps_in = cap.get(cv2.CAP_PROP_FPS)
             print("Incoming frame rate: %s"%fps_in)
         #cap.set(cv2.CAP_PROP_FPS, 20) # Should we alter the frames rate and set it to 20 fps?
+        # Get audio stream
+        """
+        audio = pyaudio.PyAudio()
+        stream = audio.open(format=self.format, channels=self.channels, rate=self.rate, input=True, frames_per_buffer=self.frames_per_buffer)
+        audio_frames = []
+        stream.start_stream()
+        """
         while True:
             if cap.isOpened():
                 ret, frame = cap.read()
                 if ret == True:
                     self.processq.put([outnum, frame])
-                    #if self.DEBUG:
+                    if self.DEBUG == 2:
+                        print("Put a frame in queue for out writer %s"%outnum)
                     #    self.show_frame(frame)
+                    # Read audio
+                    """
+                    audiodata = stream.read(self.frames_per_buffer)
+                    audio_frames.append(audiodata)
+                    """
                     time.sleep(self.FPS)
                 else:
-                    pass
+                    if self.DEBUG:
+                        print("Could not read frame for feed ID %s"%feedid)
+                    t = time.time()
+                    if t - lastcaptured > 5: # If the frames can't be read for more than 5 seconds, reopen the stream
+                        print("Reopening feed identified by feed ID %s"%feedid)
+                        cap.release()
+                        cap = cv2.VideoCapture(streamurl)
+                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
+                    continue
             else: # Check if the streamurl is still having the feed
+                if self.DEBUG:
+                    print("Feed identified by ID %s has closed. Verifying availability of feed."%feedid)
                 retval = self.verifystream(streamurl)
                 if retval: # retval is True, so reconnect to the stream...
                     cap = cv2.VideoCapture(streamurl)
-                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 250)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
                     if self.DEBUG: # Check incoming frame rate if DEBUG mode is set
                         fps_in = cap.get(cv2.CAP_PROP_FPS)
-                        print("Incoming frame rate: %s"%fps_in)
+                        print("Feed %s reconnected. Incoming frame rate: %s"%(feedid, fps_in))
                 else: # Stream is not available anymore, so update feed record in DB
-                    print("Stream %s is no longer available."%streamurl)
+                    if self.DEBUG:
+                        print("Stream %s is no longer available."%streamurl)
                     curdatetime = datetime.datetime.now()
                     pdbconn = MySQLdb.connect(host=self.dbhost, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
                     pcursor = pdbconn.cursor()
@@ -332,6 +349,30 @@ class VideoBot(object):
                     pdbconn.close()
                     break # Break out of infinite loop.
         cap.release() # Done!
+        # End audio stream
+        """
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
+        # Write audio file
+        fpath = os.path.dirname(outfilename)
+        fnamefext = os.path.basename(outfilename)
+        fname = fnamefext.split(".")[0]
+        audiofile = fpath + os.path.sep + fname + ".wav"
+        combinedfile = fpath + os.path.sep + fname + "_combined.avi"
+        if self.DEBUG:
+            print("Audio file is %s"%audiofile)
+        waveFile = wave.open(audiofile, 'wb')
+        waveFile.setnchannels(self.channels)
+        waveFile.setsampwidth(audio.get_sample_size(self.format))
+        waveFile.setframerate(self.rate)
+        waveFile.writeframes(b''.join(audio_frames))
+        waveFile.close()
+        print("Normal recording\nMuxing")
+        cmd = "ffmpeg -y -ac 2 -channel_layout stereo -i %s -i %s -pix_fmt yuv420p %s"%(audiofile, outfilename, combinedfile)
+        subprocess.call(cmd, shell=True)
+        print("..")
+        """
         if self.DEBUG:
             cv2.destroyAllWindows()
 
@@ -347,6 +388,8 @@ class VideoBot(object):
             if outlist.__len__() > outnum:
                 out = outlist[outnum]
             else:
+                if self.DEBUG == 2:
+                    print("Could not get writer %s"%outnum)
                 continue
             if frame is not None and out.isOpened():
                 out.write(frame)
@@ -356,7 +399,8 @@ class VideoBot(object):
             else:
                 if self.processq.empty() and not isempty:
                     isempty = True
-                elif self.processq.empty() and isempty: # This means all frameq queues are empty.
+                elif self.processq.empty() and isempty: # processq queue is empty now and was empty last time
+                    print("processq is empty")
                     time.sleep(10) # Sleep for 10 secs.
                     endofrun = True
                 elif endofrun and isempty:
@@ -466,12 +510,33 @@ class VideoBot(object):
             team1 = htmltagPattern.sub("", team1)
             team1 = beginspacePattern.sub("", team1)
             team1 = endspacePattern.sub("", team1)
-        if playersspans.__len__() > 1:
-            team2 = playersspans[1].renderContents().decode('utf-8')
+        if playersspans.__len__() > 2:
+            team1_2 = playersspans[1].renderContents().decode('utf-8')
+            team1_2 = team1_2.replace("\n", "").replace("\r", "")
+            team1_2 = htmltagPattern.sub("", team1_2)
+            team1_2 = beginspacePattern.sub("", team1_2)
+            team1_2 = endspacePattern.sub("", team1_2)
+            team1 = team1 + ", " + team1_2
+            team2 = playersspans[2].renderContents().decode('utf-8')
             team2 = team2.replace("\n", "").replace("\r", "")
             team2 = htmltagPattern.sub("", team2)
             team2 = beginspacePattern.sub("", team2)
             team2 = endspacePattern.sub("", team2)
+            if playersspans.__len__() > 3:
+                team2_2 = playersspans[3].renderContents().decode('utf-8')
+                team2_2 = team2_2.replace("\n", "").replace("\r", "")
+                team2_2 = htmltagPattern.sub("", team2_2)
+                team2_2 = beginspacePattern.sub("", team2_2)
+                team2_2 = endspacePattern.sub("", team2_2)
+                team2 = team2 + ", " + team2_2
+        else:
+            team2 = ""
+            if playersspans.__len__() > 1:
+                team2 = playersspans[1].renderContents().decode('utf-8')
+                team2 = team2.replace("\n", "").replace("\r", "")
+                team2 = htmltagPattern.sub("", team2)
+                team2 = beginspacePattern.sub("", team2)
+                team2 = endspacePattern.sub("", team2)
         metadata['FeedTitle'] = eventtitle
         metadata['FeedEventTeam1'] = team1
         metadata['FeedEventTeam2'] = team2
@@ -484,6 +549,7 @@ if __name__ == "__main__":
     if sys.argv.__len__() < 2:
         print("Insufficient parameters")
         sys.exit()
+    signal.signal(signal.SIGINT, handler)
     siteurl = sys.argv[1]
     itftennis = VideoBot(siteurl)
     outlist = []
@@ -494,13 +560,24 @@ if __name__ == "__main__":
     dbconn = MySQLdb.connect(host=itftennis.dbhost, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
     cursor = dbconn.cursor()
     feedidlist = []
+    vidsdict = {}
+    streampattern = re.compile("\?vid=(\d+)$")
     while True:
         streampageurls = itftennis.checkforlivestream()
         if streampageurls.__len__() > 0:
-            print("Detected %s new live stream(s)... Getting them."%streampageurls.__len__())
             p = Pool(streampageurls.__len__())
             argslist = []
             for streampageurl in streampageurls:
+                sps = re.search(streampattern, streampageurl)
+                if sps:
+                    streamnum = sps.groups()[0]
+                    if streamnum not in vidsdict.keys(): # Check if this stream has already been processed.
+                        vidsdict[streamnum] = 1
+                    else:
+                        continue
+                else:
+                    continue
+                print("Detected new live stream... Getting it.")
                 streamurl = itftennis.getstreamurlfrompage(streampageurl)
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
@@ -508,7 +585,6 @@ if __name__ == "__main__":
                     out = cv2.VideoWriter(outfilename, itftennis.fourcc, 1/itftennis.FPS, itftennis.size)
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
-                    #print(outnum)
                     # Now, get feed metadata...
                     metadata = itftennis.getfeedmetadata(streampageurl)
                     # Save metadata in DB
@@ -518,9 +594,9 @@ if __name__ == "__main__":
                         dbconn.commit() # Just in case autocommit is not set.
                     except:
                         print("Error in data insertion to DB: %s\nErroneous SQL: %s"%(sys.exc_info()[1].__str__(), feedinsertsql))
+                    feedid = -1
                     try:
                         # Get the Id of the inserted feed
-                        feedid = -1
                         feedidsql = "select max(id) from feedman_feeds"
                         cursor.execute(feedidsql)
                         feedrecs = cursor.fetchall()
@@ -532,7 +608,7 @@ if __name__ == "__main__":
                     print("Couldn't get the stream url from page")
                 #if itftennis.DEBUG: # Let only a single stream be processed for debugging.
                 #    break
-            p.map(itftennis.capturelivestream_cv2_q, argslist)
+            p.map(itftennis.capturelivestream, argslist)
         time.sleep(itftennis.livestreamcheckinterval)
     t.join()
     for out in outlist:
@@ -551,6 +627,8 @@ https://stackoverflow.com/questions/55828451/video-streaming-from-ip-camera-in-p
 https://stackoverflow.com/questions/55099413/python-opencv-streaming-from-camera-multithreading-timestamps
 https://stackoverflow.com/questions/58592291/how-to-capture-multiple-camera-streams-with-opencv
 https://www.it-jim.com/blog/practical-aspects-of-real-time-video-pipelines/
+https://code-maven.com/catch-control-c-in-python
+https://www.baeldung.com/linux/run-script-on-startup
 """
 # supmit
 

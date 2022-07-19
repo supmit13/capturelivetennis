@@ -21,6 +21,7 @@ from threading import Thread
 import pymysql
 pymysql.install_as_MySQLdb()
 import MySQLdb
+import psycopg2
 
 
 
@@ -153,7 +154,8 @@ class VideoBot(object):
         self.dbpasswd = "feedpasswd"
         self.dbname = "feeddb"
         self.dbhost = "localhost"
-        self.dbport = 3306
+        #self.dbport = 3306
+        self.dbport = 5432 # for postgresql
         
 
     def checkforlivestream(self):
@@ -298,10 +300,12 @@ class VideoBot(object):
         audio_frames = []
         stream.start_stream()
         """
+        lastcaptured = time.time()
         while True:
             if cap.isOpened():
                 ret, frame = cap.read()
                 if ret == True:
+                    lastcaptured = time.time()
                     self.processq.put([outnum, frame])
                     if self.DEBUG == 2:
                         print("Put a frame in queue for out writer %s"%outnum)
@@ -336,7 +340,8 @@ class VideoBot(object):
                     if self.DEBUG:
                         print("Stream %s is no longer available."%streamurl)
                     curdatetime = datetime.datetime.now()
-                    pdbconn = MySQLdb.connect(host=self.dbhost, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
+                    #pdbconn = MySQLdb.connect(host=self.dbhost, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
+                    pdbconn = psycopg2.connect(database=self.dbname, user=self.dbuser, password=self.dbpasswd, host=self.dbhost, port=self.dbport)
                     pcursor = pdbconn.cursor()
                     updatesql = "update feedman_feeds set feedend='%s' where id=%s"%(curdatetime, feedid)
                     if self.DEBUG:
@@ -557,7 +562,8 @@ if __name__ == "__main__":
     t.daemon = True
     t.start()
     # Create a database connection and as associated cursor object. We will handle database operations from main thread only.
-    dbconn = MySQLdb.connect(host=itftennis.dbhost, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
+    #dbconn = MySQLdb.connect(host=itftennis.dbhost, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
+    dbconn = psycopg2.connect(database=itftennis.dbname, user=itftennis.dbuser, password=itftennis.dbpasswd, host=itftennis.dbhost, port=itftennis.dbport)
     cursor = dbconn.cursor()
     feedidlist = []
     vidsdict = {}

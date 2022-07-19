@@ -22,6 +22,7 @@ from threading import Thread
 import pymysql
 pymysql.install_as_MySQLdb()
 import MySQLdb
+import psycopg2
 
 
 
@@ -331,7 +332,8 @@ class VideoBot(object):
                 else: # Stream is not available anymore, so update feed record in DB
                     print("Feed %s is no longer available."%feedid)
                     curdatetime = datetime.datetime.now()
-                    pdbconn = MySQLdb.connect(host=self.dbhost, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
+                    #pdbconn = MySQLdb.connect(host=self.dbhost, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
+                    pdbconn = psycopg2.connect(database=self.dbname, user=self.dbuser, password=self.dbpasswd, host=self.dbhost, port=self.dbport)
                     pcursor = pdbconn.cursor()
                     updatesql = "update feedman_feeds set feedend='%s', feedstatus='past' where id=%s"%(curdatetime, feedid)
                     if self.DEBUG:
@@ -515,7 +517,8 @@ if __name__ == "__main__":
     siteurl = sys.argv[1]
     itftennis = VideoBot(siteurl)
     # Create a database connection and as associated cursor object. We will handle database operations from main thread only.
-    dbconn = MySQLdb.connect(host=itftennis.dbhost, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
+    #dbconn = MySQLdb.connect(host=itftennis.dbhost, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
+    dbconn = psycopg2.connect(database=itftennis.dbname, user=itftennis.dbuser, password=itftennis.dbpasswd, host=itftennis.dbhost, port=itftennis.dbport)
     cursor = dbconn.cursor()
     threadsque = []
     vidsdict = {}

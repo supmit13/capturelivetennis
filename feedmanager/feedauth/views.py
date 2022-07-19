@@ -28,7 +28,8 @@ def showlogin(request):
     template = loader.get_template('login.html')
     return HttpResponse(template.render(context, request))
 
-@csrf_protect
+
+@csrf_exempt
 def dologin(request):
     if request.method != 'POST':
         return HttpResponse("Invalid method of call")

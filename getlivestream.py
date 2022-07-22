@@ -156,6 +156,7 @@ class VideoBot(object):
         self.frames_per_buffer = 1024
         self.channels = 2
         self.format = pyaudio.paInt16
+        self.devices_state = {}
         # Other params
         self.DEBUG = 1 # TODO: Remember to set it to 0 (or False) before deploying somewhere.
         self.dbuser = "feeduser"
@@ -383,10 +384,13 @@ class VideoBot(object):
             print("Normal recording\nMuxing")
             muxcmd = "ffmpeg -y -ac 2 -channel_layout stereo -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
             subprocess.call(muxcmd, shell=True)
+            self.devices_state[str(deviceindex)] = 0 # Device status is set to 0 - free
             #print("..")
         """
         if self.DEBUG:
             cv2.destroyAllWindows()
+        # Exit process
+        sys.exit()
 
     
     def framewriter(self, outlist):
@@ -577,25 +581,25 @@ if __name__ == "__main__":
     info = p_m.get_host_api_info_by_index(0)
     devicecount = info.get('deviceCount') # We hope we have enough devices... There could be 25 - 30 matches played simultaneously.
     deviceslist = []
-    devices_state = {}
     for i in range(0, devicecount):
         if (p_m.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
             deviceslist.append(i)
-            devices_state[str(i)] = 0 # Device is free - initial state.
+            itftennis.devices_state[str(i)] = 0 # Device is free - initial state.
     feedidlist = []
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
     while True:
         streampageurls = itftennis.checkforlivestream()
         if streampageurls.__len__() > 0:
-            p = Pool(streampageurls.__len__())
             argslist = []
+            newurlscount = 0
             for streampageurl in streampageurls:
                 sps = re.search(streampattern, streampageurl)
                 if sps:
                     streamnum = sps.groups()[0]
                     if streamnum not in vidsdict.keys(): # Check if this stream has already been processed.
                         vidsdict[streamnum] = 1
+                        newurlscount += 1
                     else:
                         continue
                 else:
@@ -629,16 +633,18 @@ if __name__ == "__main__":
                     # Check deviceslist and devices_state to find the lowest device index that is free. If no devices are free, assign an invalid device index: -1.
                     selecteddevice = -1
                     for devindex in deviceslist:
-                        if devices_state[str(devindex)] == 0:
+                        if itftennis.devices_state[str(devindex)] == 0:
                             selecteddevice = devindex
-                            devices_state[str(devindex)] = 1
+                            itftennis.devices_state[str(devindex)] = 1
                             break
                     argslist.append([streamurl, outnum, feedid, selecteddevice, outfilename])   
                 else:
                     print("Couldn't get the stream url from page")
                 #if itftennis.DEBUG: # Let only a single stream be processed for debugging.
                 #    break
-            p.map(itftennis.capturelivestream, argslist)
+            if newurlscount > 0:
+                p = Pool(newurlscount)
+                p.map(itftennis.capturelivestream, argslist)
         time.sleep(itftennis.livestreamcheckinterval)
     t.join()
     for out in outlist:

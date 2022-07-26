@@ -667,5 +667,5 @@ https://code-maven.com/catch-control-c-in-python
 https://www.baeldung.com/linux/run-script-on-startup
 https://stackoverflow.com/questions/36894315/how-to-select-a-specific-input-device-with-pyaudio
 """
-# supmit
+# Dev: Supriyo
 

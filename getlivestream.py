@@ -15,7 +15,7 @@ from urllib.parse import urlencode, quote_plus, urlparse
 import html
 import numpy as np
 import cv2
-import pyaudio
+#import pyaudio
 import wave
 from multiprocessing import Process, Pool, Queue
 import multiprocessing as mp
@@ -23,7 +23,7 @@ from threading import Thread
 import pymysql
 pymysql.install_as_MySQLdb()
 import MySQLdb
-import psycopg2
+#import psycopg2
 
 
 
@@ -155,16 +155,16 @@ class VideoBot(object):
         self.rate = 44100
         self.frames_per_buffer = 1024
         self.channels = 2
-        self.format = pyaudio.paInt16
+        #self.format = pyaudio.paInt16
         self.devices_state = {}
         # Other params
         self.DEBUG = 1 # TODO: Remember to set it to 0 (or False) before deploying somewhere.
         self.dbuser = "feeduser"
         self.dbpasswd = "feedpasswd"
         self.dbname = "feeddb"
-        self.dbhost = "localhost"
-        #self.dbport = 3306
-        self.dbport = 5432 # for postgresql
+        self.dbhost = "livestreamhost" # Since this will be connecting to the mysql db inside the docker container
+        self.dbport = 33060
+        #self.dbport = 5432 # for postgresql
         
 
     def checkforlivestream(self):
@@ -359,8 +359,8 @@ class VideoBot(object):
                     if self.DEBUG:
                         print("Stream %s is no longer available."%streamurl)
                     curdatetime = datetime.datetime.now()
-                    #pdbconn = MySQLdb.connect(host=self.dbhost, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
-                    pdbconn = psycopg2.connect(database=self.dbname, user=self.dbuser, password=self.dbpasswd, host=self.dbhost, port=self.dbport)
+                    pdbconn = MySQLdb.connect(host=self.dbhost, port=self.dbport, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
+                    #pdbconn = psycopg2.connect(database=self.dbname, user=self.dbuser, password=self.dbpasswd, host=self.dbhost, port=self.dbport)
                     pcursor = pdbconn.cursor()
                     updatesql = "update feedman_feeds set feedend='%s' where id=%s"%(curdatetime, feedid)
                     if self.DEBUG:
@@ -573,10 +573,11 @@ if __name__ == "__main__":
     t.daemon = True
     t.start()
     # Create a database connection and as associated cursor object. We will handle database operations from main thread only.
-    #dbconn = MySQLdb.connect(host=itftennis.dbhost, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
-    dbconn = psycopg2.connect(database=itftennis.dbname, user=itftennis.dbuser, password=itftennis.dbpasswd, host=itftennis.dbhost, port=itftennis.dbport)
+    dbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
+    #dbconn = psycopg2.connect(database=itftennis.dbname, user=itftennis.dbuser, password=itftennis.dbpasswd, host=itftennis.dbhost, port=itftennis.dbport)
     cursor = dbconn.cursor()
     # Get the list of all microphones connect to the system:
+    """
     p_m = pyaudio.PyAudio()
     info = p_m.get_host_api_info_by_index(0)
     devicecount = info.get('deviceCount') # We hope we have enough devices... There could be 25 - 30 matches played simultaneously.
@@ -585,6 +586,7 @@ if __name__ == "__main__":
         if (p_m.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
             deviceslist.append(i)
             itftennis.devices_state[str(i)] = 0 # Device is free - initial state.
+    """
     feedidlist = []
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
@@ -608,7 +610,7 @@ if __name__ == "__main__":
                 streamurl = itftennis.getstreamurlfrompage(streampageurl)
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
-                    outfilename = time.strftime("/home/supmit/work/capturelivefeed/tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
+                    outfilename = time.strftime("tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
                     out = cv2.VideoWriter(outfilename, itftennis.fourcc, 1/itftennis.FPS, itftennis.size)
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
@@ -632,11 +634,13 @@ if __name__ == "__main__":
                         pass # Leave it if we can't get it. We can get it from the management interface.
                     # Check deviceslist and devices_state to find the lowest device index that is free. If no devices are free, assign an invalid device index: -1.
                     selecteddevice = -1
+                    """
                     for devindex in deviceslist:
                         if itftennis.devices_state[str(devindex)] == 0:
                             selecteddevice = devindex
                             itftennis.devices_state[str(devindex)] = 1
                             break
+                    """
                     argslist.append([streamurl, outnum, feedid, selecteddevice, outfilename])   
                 else:
                     print("Couldn't get the stream url from page")
@@ -666,6 +670,11 @@ https://www.it-jim.com/blog/practical-aspects-of-real-time-video-pipelines/
 https://code-maven.com/catch-control-c-in-python
 https://www.baeldung.com/linux/run-script-on-startup
 https://stackoverflow.com/questions/36894315/how-to-select-a-specific-input-device-with-pyaudio
+https://stackoverflow.com/questions/48561981/activate-python-virtualenv-in-dockerfile
+https://www.docker.com/blog/containerized-python-development-part-1/
+https://stackoverflow.com/questions/72468361/docker-cant-find-python-venv-executable
+https://blog.carlesmateo.com/2021/07/07/a-small-python-mysql-docker-program-as-a-sample/
+https://stackoverflow.com/questions/27947865/docker-how-to-restart-process-inside-of-container
 """
 # Dev: Supriyo
 

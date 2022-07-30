@@ -162,8 +162,13 @@ class VideoBot(object):
         self.dbuser = "feeduser"
         self.dbpasswd = "feedpasswd"
         self.dbname = "feeddb"
+<<<<<<< HEAD
         self.dbhost = "localhost" # Since this will be connecting to the mysql db inside the docker container
         self.dbport = 3306
+=======
+        self.dbhost = "livestreamhost" # Since this will be connecting to the mysql db inside the docker container
+        self.dbport = 33060
+>>>>>>> e1b8464e9c9a6b539a8d213a7bcea7099fc711e4
         #self.dbport = 5432 # for postgresql
         
 
@@ -610,7 +615,11 @@ if __name__ == "__main__":
                 streamurl = itftennis.getstreamurlfrompage(streampageurl)
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
+<<<<<<< HEAD
                     outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
+=======
+                    outfilename = time.strftime("tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
+>>>>>>> e1b8464e9c9a6b539a8d213a7bcea7099fc711e4
                     out = cv2.VideoWriter(outfilename, itftennis.fourcc, 1/itftennis.FPS, itftennis.size)
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1

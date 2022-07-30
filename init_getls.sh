@@ -2,14 +2,17 @@
 
 # This file starts the execution of getlivestream.py.
 # This script is meant to be executed on system bootup.
+cd /home/supmit/work/capturelivefeed
 
 curdir=`pwd`
 
+source ./videoenv/bin/activate
+
 # Path to python interpreter in (virtual) environment
-pypath="python"
+pypath=`which python`
 
 # Path to getlivestream.py
-getlspath="getlivestream.py"
+getlspath="$curdir/getlivestream.py"
 
 # execute getlivestream.py
 `nohup $pypath $getlspath "https://live.itftennis.com/en/live-streams/" &`

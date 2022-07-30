@@ -1,0 +1,62 @@
+version: '3'
+services:
+  
+  #Nginx Service
+  webserver:
+    image: nginx:alpine
+    container_name: webserver
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "8001:8001"
+    networks:
+      - getfeed-network
+    working_dir: /home/supmit/work/capturelivefeed
+    volumes:
+     - ./:/var/www
+     - ./nginx.conf:/etc/nginx/sites-enabled/nginx.conf
+
+  #MySQL Service
+  db:
+    image: mysql:8.0.30
+    container_name: mysqldb
+    restart: unless-stopped
+    tty: true
+    working_dir: /home/supmit/work/capturelivefeed
+    command: bash -c "mysqld --initialize-insecure --default_authentication_plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci --explicit_defaults_for_timestamp=true -v ./dbdata:/var/lib/mysql && mysql -u root -pspmprx --host localhost --port 33060 <./feeddb.sql"
+    ports:
+      - "33060:33060"
+    environment:
+      MYSQL_USER: feeduser
+      MYSQL_DATABASE: feeddb
+      MYSQL_PASSWORD: feedpasswd
+      MYSQL_ROOT_PASSWORD: spmprx
+      MYSQL_HOST: localhost
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - ${PWD}/dbdata:/var/lib/mysql
+      - ${PWD}/mysqld.cnf:/etc/mysql/mysqld.conf.d/mysqld.cnf
+    networks:
+      - getfeed-network
+
+  #Python Service
+  getlivestream:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: getlivestream
+    restart: unless-stopped
+    tty: true
+    environment:
+      SERVICE_NAME: getlivefeed
+      SERVICE_TAGS: dev
+    working_dir: /home/supmit/work/capturelivefeed
+
+#Docker Networks
+networks:
+  getfeed-network:
+    driver: bridge
+
+#Volumes
+

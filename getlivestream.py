@@ -15,13 +15,15 @@ from urllib.parse import urlencode, quote_plus, urlparse
 import html
 import numpy as np
 import cv2
+#import pyaudio
+import wave
 from multiprocessing import Process, Pool, Queue
 import multiprocessing as mp
 from threading import Thread
 import pymysql
 pymysql.install_as_MySQLdb()
 import MySQLdb
-import psycopg2
+#import psycopg2
 
 
 
@@ -149,13 +151,20 @@ class VideoBot(object):
         # itftennis streams have a rate of 25 fps.
         self.FPS = 1/25 # This is the delay that would be applied after every read(). This would 'normalize' the frame rate and handle frame loss jitters.
         self.FPS_MS = int(self.FPS * 1000) # Same delay as above, in milliseconds.
+        # Audio parameters:
+        self.rate = 44100
+        self.frames_per_buffer = 1024
+        self.channels = 2
+        #self.format = pyaudio.paInt16
+        self.devices_state = {}
+        # Other params
         self.DEBUG = 1 # TODO: Remember to set it to 0 (or False) before deploying somewhere.
         self.dbuser = "feeduser"
         self.dbpasswd = "feedpasswd"
         self.dbname = "feeddb"
-        self.dbhost = "localhost"
-        #self.dbport = 3306
-        self.dbport = 5432 # for postgresql
+        self.dbhost = "localhost" # Since this will be connecting to the mysql db inside the docker container
+        self.dbport = 3306
+        #self.dbport = 5432 # for postgresql
         
 
     def checkforlivestream(self):
@@ -285,7 +294,7 @@ class VideoBot(object):
 
 
     def capturelivestream(self, argslist):
-        streamurl, outnum, feedid = argslist[0], argslist[1], argslist[2]
+        streamurl, outnum, feedid, deviceindex, outfilename = argslist[0], argslist[1], argslist[2], argslist[3], argslist[4]
         cap = cv2.VideoCapture(streamurl)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
         # check the incoming frame rate if we are in DEBUG mode
@@ -293,12 +302,21 @@ class VideoBot(object):
             fps_in = cap.get(cv2.CAP_PROP_FPS)
             print("Incoming frame rate: %s"%fps_in)
         #cap.set(cv2.CAP_PROP_FPS, 20) # Should we alter the frames rate and set it to 20 fps?
-        # Get audio stream
+        # Get audio stream, only if we received a valid device index
         """
-        audio = pyaudio.PyAudio()
-        stream = audio.open(format=self.format, channels=self.channels, rate=self.rate, input=True, frames_per_buffer=self.frames_per_buffer)
-        audio_frames = []
-        stream.start_stream()
+        if deviceindex >= 0:
+            audio = pyaudio.PyAudio()
+            stream = audio.open(input_device_index=deviceindex, format=self.format, channels=self.channels, rate=self.rate, input=True, frames_per_buffer=self.frames_per_buffer)
+            stream.start_stream()
+            # Create a temporary file to write the frames periodically
+            fpath = os.path.dirname(outfilename)
+            fnamefext = os.path.basename(outfilename)
+            fname = fnamefext.split(".")[0]
+            tempaudiofile = fpath + os.path.sep + fname + ".wav"
+            twf = wave.open(tempaudiofile, 'wb')
+            twf.setnchannels(self.channels)
+            twf.setsampwidth(audio.get_sample_size(self.format))
+            twf.setframerate(self.rate)
         """
         lastcaptured = time.time()
         while True:
@@ -310,10 +328,11 @@ class VideoBot(object):
                     if self.DEBUG == 2:
                         print("Put a frame in queue for out writer %s"%outnum)
                     #    self.show_frame(frame)
-                    # Read audio
+                    # Read audio if we received a valid device index.
                     """
-                    audiodata = stream.read(self.frames_per_buffer)
-                    audio_frames.append(audiodata)
+                    if deviceindex >= 0:
+                        audiodata = stream.read(self.frames_per_buffer)
+                        twf.writeframes(audiodata)
                     """
                     time.sleep(self.FPS)
                 else:
@@ -340,8 +359,8 @@ class VideoBot(object):
                     if self.DEBUG:
                         print("Stream %s is no longer available."%streamurl)
                     curdatetime = datetime.datetime.now()
-                    #pdbconn = MySQLdb.connect(host=self.dbhost, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
-                    pdbconn = psycopg2.connect(database=self.dbname, user=self.dbuser, password=self.dbpasswd, host=self.dbhost, port=self.dbport)
+                    pdbconn = MySQLdb.connect(host=self.dbhost, port=self.dbport, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
+                    #pdbconn = psycopg2.connect(database=self.dbname, user=self.dbuser, password=self.dbpasswd, host=self.dbhost, port=self.dbport)
                     pcursor = pdbconn.cursor()
                     updatesql = "update feedman_feeds set feedend='%s' where id=%s"%(curdatetime, feedid)
                     if self.DEBUG:
@@ -354,32 +373,24 @@ class VideoBot(object):
                     pdbconn.close()
                     break # Break out of infinite loop.
         cap.release() # Done!
-        # End audio stream
+        # End audio stream if we opened one, i.e., if we received a valid device index.
         """
-        stream.stop_stream()
-        stream.close()
-        audio.terminate()
-        # Write audio file
-        fpath = os.path.dirname(outfilename)
-        fnamefext = os.path.basename(outfilename)
-        fname = fnamefext.split(".")[0]
-        audiofile = fpath + os.path.sep + fname + ".wav"
-        combinedfile = fpath + os.path.sep + fname + "_combined.avi"
-        if self.DEBUG:
-            print("Audio file is %s"%audiofile)
-        waveFile = wave.open(audiofile, 'wb')
-        waveFile.setnchannels(self.channels)
-        waveFile.setsampwidth(audio.get_sample_size(self.format))
-        waveFile.setframerate(self.rate)
-        waveFile.writeframes(b''.join(audio_frames))
-        waveFile.close()
-        print("Normal recording\nMuxing")
-        cmd = "ffmpeg -y -ac 2 -channel_layout stereo -i %s -i %s -pix_fmt yuv420p %s"%(audiofile, outfilename, combinedfile)
-        subprocess.call(cmd, shell=True)
-        print("..")
+        if deviceindex >= 0:
+            stream.stop_stream()
+            stream.close()
+            audio.terminate()
+            twf.close() # Temporary audio file closed.
+            combinedfile = fpath + os.path.sep + fname + "_combined.avi"
+            print("Normal recording\nMuxing")
+            muxcmd = "ffmpeg -y -ac 2 -channel_layout stereo -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
+            subprocess.call(muxcmd, shell=True)
+            self.devices_state[str(deviceindex)] = 0 # Device status is set to 0 - free
+            #print("..")
         """
         if self.DEBUG:
             cv2.destroyAllWindows()
+        # Exit process
+        sys.exit()
 
     
     def framewriter(self, outlist):
@@ -562,23 +573,35 @@ if __name__ == "__main__":
     t.daemon = True
     t.start()
     # Create a database connection and as associated cursor object. We will handle database operations from main thread only.
-    #dbconn = MySQLdb.connect(host=itftennis.dbhost, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
-    dbconn = psycopg2.connect(database=itftennis.dbname, user=itftennis.dbuser, password=itftennis.dbpasswd, host=itftennis.dbhost, port=itftennis.dbport)
+    dbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
+    #dbconn = psycopg2.connect(database=itftennis.dbname, user=itftennis.dbuser, password=itftennis.dbpasswd, host=itftennis.dbhost, port=itftennis.dbport)
     cursor = dbconn.cursor()
+    # Get the list of all microphones connect to the system:
+    """
+    p_m = pyaudio.PyAudio()
+    info = p_m.get_host_api_info_by_index(0)
+    devicecount = info.get('deviceCount') # We hope we have enough devices... There could be 25 - 30 matches played simultaneously.
+    deviceslist = []
+    for i in range(0, devicecount):
+        if (p_m.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
+            deviceslist.append(i)
+            itftennis.devices_state[str(i)] = 0 # Device is free - initial state.
+    """
     feedidlist = []
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
     while True:
         streampageurls = itftennis.checkforlivestream()
         if streampageurls.__len__() > 0:
-            p = Pool(streampageurls.__len__())
             argslist = []
+            newurlscount = 0
             for streampageurl in streampageurls:
                 sps = re.search(streampattern, streampageurl)
                 if sps:
                     streamnum = sps.groups()[0]
                     if streamnum not in vidsdict.keys(): # Check if this stream has already been processed.
                         vidsdict[streamnum] = 1
+                        newurlscount += 1
                     else:
                         continue
                 else:
@@ -587,7 +610,7 @@ if __name__ == "__main__":
                 streamurl = itftennis.getstreamurlfrompage(streampageurl)
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
-                    outfilename = time.strftime("/home/supmit/work/capturelivefeed/tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
+                    outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
                     out = cv2.VideoWriter(outfilename, itftennis.fourcc, 1/itftennis.FPS, itftennis.size)
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
@@ -609,12 +632,23 @@ if __name__ == "__main__":
                         feedid = int(feedrecs[0][0])
                     except:
                         pass # Leave it if we can't get it. We can get it from the management interface.
-                    argslist.append([streamurl, outnum, feedid])   
+                    # Check deviceslist and devices_state to find the lowest device index that is free. If no devices are free, assign an invalid device index: -1.
+                    selecteddevice = -1
+                    """
+                    for devindex in deviceslist:
+                        if itftennis.devices_state[str(devindex)] == 0:
+                            selecteddevice = devindex
+                            itftennis.devices_state[str(devindex)] = 1
+                            break
+                    """
+                    argslist.append([streamurl, outnum, feedid, selecteddevice, outfilename])   
                 else:
                     print("Couldn't get the stream url from page")
                 #if itftennis.DEBUG: # Let only a single stream be processed for debugging.
                 #    break
-            p.map(itftennis.capturelivestream, argslist)
+            if newurlscount > 0:
+                p = Pool(newurlscount)
+                p.map(itftennis.capturelivestream, argslist)
         time.sleep(itftennis.livestreamcheckinterval)
     t.join()
     for out in outlist:
@@ -635,6 +669,12 @@ https://stackoverflow.com/questions/58592291/how-to-capture-multiple-camera-stre
 https://www.it-jim.com/blog/practical-aspects-of-real-time-video-pipelines/
 https://code-maven.com/catch-control-c-in-python
 https://www.baeldung.com/linux/run-script-on-startup
+https://stackoverflow.com/questions/36894315/how-to-select-a-specific-input-device-with-pyaudio
+https://stackoverflow.com/questions/48561981/activate-python-virtualenv-in-dockerfile
+https://www.docker.com/blog/containerized-python-development-part-1/
+https://stackoverflow.com/questions/72468361/docker-cant-find-python-venv-executable
+https://blog.carlesmateo.com/2021/07/07/a-small-python-mysql-docker-program-as-a-sample/
+https://stackoverflow.com/questions/27947865/docker-how-to-restart-process-inside-of-container
 """
-# supmit
+# Dev: Supriyo
 

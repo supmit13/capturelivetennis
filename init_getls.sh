@@ -15,7 +15,7 @@ pypath=`which python`
 getlspath="$curdir/getlivestream.py"
 
 # execute getlivestream.py
-`nohup $pypath $getlspath "https://live.itftennis.com/en/live-streams/" &`
+`nohup $pypath $getlspath "https://live.itftennis.com/en/live-streams/" >getlivestream.out 2>&1`
 
 # Provide execute permissions to this script:
 # chmod 755 /home/supmit/work/capturelivefeed/init_getls.sh

@@ -155,20 +155,15 @@ class VideoBot(object):
         self.rate = 44100
         self.frames_per_buffer = 1024
         self.channels = 2
-        #self.format = pyaudio.paInt16
+        self.format = pyaudio.paInt16
         self.devices_state = {}
         # Other params
         self.DEBUG = 1 # TODO: Remember to set it to 0 (or False) before deploying somewhere.
         self.dbuser = "feeduser"
         self.dbpasswd = "feedpasswd"
         self.dbname = "feeddb"
-<<<<<<< HEAD
         self.dbhost = "localhost" # Since this will be connecting to the mysql db inside the docker container
         self.dbport = 3306
-=======
-        self.dbhost = "livestreamhost" # Since this will be connecting to the mysql db inside the docker container
-        self.dbport = 33060
->>>>>>> e1b8464e9c9a6b539a8d213a7bcea7099fc711e4
         #self.dbport = 5432 # for postgresql
         
 
@@ -308,7 +303,6 @@ class VideoBot(object):
             print("Incoming frame rate: %s"%fps_in)
         #cap.set(cv2.CAP_PROP_FPS, 20) # Should we alter the frames rate and set it to 20 fps?
         # Get audio stream, only if we received a valid device index
-        """
         if deviceindex >= 0:
             audio = pyaudio.PyAudio()
             stream = audio.open(input_device_index=deviceindex, format=self.format, channels=self.channels, rate=self.rate, input=True, frames_per_buffer=self.frames_per_buffer)
@@ -322,7 +316,6 @@ class VideoBot(object):
             twf.setnchannels(self.channels)
             twf.setsampwidth(audio.get_sample_size(self.format))
             twf.setframerate(self.rate)
-        """
         lastcaptured = time.time()
         while True:
             if cap.isOpened():
@@ -334,11 +327,9 @@ class VideoBot(object):
                         print("Put a frame in queue for out writer %s"%outnum)
                     #    self.show_frame(frame)
                     # Read audio if we received a valid device index.
-                    """
                     if deviceindex >= 0:
                         audiodata = stream.read(self.frames_per_buffer)
                         twf.writeframes(audiodata)
-                    """
                     time.sleep(self.FPS)
                 else:
                     if self.DEBUG:
@@ -379,7 +370,6 @@ class VideoBot(object):
                     break # Break out of infinite loop.
         cap.release() # Done!
         # End audio stream if we opened one, i.e., if we received a valid device index.
-        """
         if deviceindex >= 0:
             stream.stop_stream()
             stream.close()
@@ -387,11 +377,10 @@ class VideoBot(object):
             twf.close() # Temporary audio file closed.
             combinedfile = fpath + os.path.sep + fname + "_combined.avi"
             print("Normal recording\nMuxing")
-            muxcmd = "ffmpeg -y -ac 2 -channel_layout stereo -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
+            muxcmd = "ffmpeg -y -ac 1 -channel_layout mono -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
             subprocess.call(muxcmd, shell=True)
             self.devices_state[str(deviceindex)] = 0 # Device status is set to 0 - free
             #print("..")
-        """
         if self.DEBUG:
             cv2.destroyAllWindows()
         # Exit process
@@ -582,7 +571,6 @@ if __name__ == "__main__":
     #dbconn = psycopg2.connect(database=itftennis.dbname, user=itftennis.dbuser, password=itftennis.dbpasswd, host=itftennis.dbhost, port=itftennis.dbport)
     cursor = dbconn.cursor()
     # Get the list of all microphones connect to the system:
-    """
     p_m = pyaudio.PyAudio()
     info = p_m.get_host_api_info_by_index(0)
     devicecount = info.get('deviceCount') # We hope we have enough devices... There could be 25 - 30 matches played simultaneously.
@@ -591,7 +579,6 @@ if __name__ == "__main__":
         if (p_m.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
             deviceslist.append(i)
             itftennis.devices_state[str(i)] = 0 # Device is free - initial state.
-    """
     feedidlist = []
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
@@ -615,11 +602,7 @@ if __name__ == "__main__":
                 streamurl = itftennis.getstreamurlfrompage(streampageurl)
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
-<<<<<<< HEAD
                     outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
-=======
-                    outfilename = time.strftime("tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
->>>>>>> e1b8464e9c9a6b539a8d213a7bcea7099fc711e4
                     out = cv2.VideoWriter(outfilename, itftennis.fourcc, 1/itftennis.FPS, itftennis.size)
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
@@ -643,13 +626,11 @@ if __name__ == "__main__":
                         pass # Leave it if we can't get it. We can get it from the management interface.
                     # Check deviceslist and devices_state to find the lowest device index that is free. If no devices are free, assign an invalid device index: -1.
                     selecteddevice = -1
-                    """
                     for devindex in deviceslist:
                         if itftennis.devices_state[str(devindex)] == 0:
                             selecteddevice = devindex
                             itftennis.devices_state[str(devindex)] = 1
                             break
-                    """
                     argslist.append([streamurl, outnum, feedid, selecteddevice, outfilename])   
                 else:
                     print("Couldn't get the stream url from page")
@@ -668,6 +649,7 @@ if __name__ == "__main__":
 # How to run: python getlivestream.py https://live.itftennis.com/en/live-streams/
 """
 References:
+https://ffmpeg.org/ffmpeg-all.html
 https://en.wikipedia.org/wiki/Video_compression_picture_types
 https://www.geeksforgeeks.org/saving-operated-video-from-a-webcam-using-opencv/
 https://stackoverflow.com/questions/58293187/opencv-real-time-streaming-video-capture-is-slow-how-to-drop-frames-or-get-sync

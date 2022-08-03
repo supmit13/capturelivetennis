@@ -646,7 +646,6 @@ if __name__ == "__main__":
     dbconn.close() # Close and keep environment clean.
 
 
-# How to run: python getlivestream.py https://live.itftennis.com/en/live-streams/
 """
 References:
 https://ffmpeg.org/ffmpeg-all.html
@@ -667,5 +666,7 @@ https://stackoverflow.com/questions/72468361/docker-cant-find-python-venv-execut
 https://blog.carlesmateo.com/2021/07/07/a-small-python-mysql-docker-program-as-a-sample/
 https://stackoverflow.com/questions/27947865/docker-how-to-restart-process-inside-of-container
 """
-# Dev: Supriyo
+# Dev: Supriyo Mitra
+# Date: 28-07-2022
+# Run: python getlivestream.py https://live.itftennis.com/en/live-streams/
 

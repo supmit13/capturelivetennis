@@ -311,7 +311,7 @@ class VideoBot(object):
             info = ffmpeg.probe(streamurl, select_streams='a')
         except:
             sys.stderr.buffer.write(sys.exc_info()[1].__str__())
-            sys.exit()
+            sys.exit() # End the thread.
         streams = info.get('streams', [])
         if len(streams) == 0:
             print('There are no streams available')
@@ -329,7 +329,8 @@ class VideoBot(object):
         buffersize = 20
         try:
             print('Opening stream ...')
-            process = ffmpeg.input(streamurl).output('pipe:', format='avi', acodec='mp2', ac=channels, ar=samplerate, loglevel='quiet',).run_async(pipe_stdout=True)
+            #channels = 1 # Hard code to 1
+            process = ffmpeg.input(streamurl).output('pipe:', format='s16le', acodec='pcm_s16le', ac=channels, ar=samplerate, loglevel='quiet',).run_async(pipe_stdout=True)
             read_size = blocksize * channels * 8
             tmpframes = None
             if os.path.exists(tempaudiofile):
@@ -339,7 +340,7 @@ class VideoBot(object):
                 ftmp.close()
             twf = wave.open(tempaudiofile, 'wb') # Opening in append mode as we might need to append if the stream is dropped
             twf.setnchannels(channels)
-            twf.setsampwidth(4) # Is this good enough?
+            twf.setsampwidth(2) # Is this good enough?
             twf.setframerate(samplerate)
             if tmpframes is not None:
                 twf.writeframes(tmpframes)
@@ -838,6 +839,8 @@ https://www.docker.com/blog/containerized-python-development-part-1/
 https://stackoverflow.com/questions/72468361/docker-cant-find-python-venv-executable
 https://blog.carlesmateo.com/2021/07/07/a-small-python-mysql-docker-program-as-a-sample/
 https://stackoverflow.com/questions/27947865/docker-how-to-restart-process-inside-of-container
+https://towardsdatascience.com/extracting-audio-from-video-using-python-58856a940fd
+https://kkroening.github.io/ffmpeg-python/
 """
 # Dev: Supriyo Mitra
 # Date: 28-07-2022

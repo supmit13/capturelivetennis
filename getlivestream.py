@@ -16,6 +16,8 @@ import html
 import numpy as np
 import cv2
 #import pyaudio
+import ffmpeg
+import subprocess
 import wave
 from multiprocessing import Process, Pool, Queue
 import multiprocessing as mp
@@ -154,8 +156,8 @@ class VideoBot(object):
         # Audio parameters:
         self.rate = 44100
         self.frames_per_buffer = 1024
-        self.channels = 2
-        self.format = pyaudio.paInt16
+        self.channels = 1
+        #self.format = pyaudio.paInt16
         self.devices_state = {}
         # Other params
         self.DEBUG = 1 # TODO: Remember to set it to 0 (or False) before deploying somewhere.
@@ -293,8 +295,79 @@ class VideoBot(object):
         cv2.destroyAllWindows()
 
 
+    def captureaudiostream_pyaudio(self, stream, twf):
+        while True:
+            try:
+                audiodata = stream.read(self.frames_per_buffer)
+                twf.writeframes(audiodata)
+            except:
+                print("Error reading audio stream: %s"%sys.exc_info()[1].__str__())
+                break
+        return None # Just to satisfy the Thread module's need for explicitly ending the thread
+
+
+    def captureaudiostream(self, streamurl, tempaudiofile):
+        try:
+            info = ffmpeg.probe(streamurl, select_streams='a')
+        except:
+            sys.stderr.buffer.write(sys.exc_info()[1].__str__())
+            sys.exit()
+        streams = info.get('streams', [])
+        if len(streams) == 0:
+            print('There are no streams available')
+            sys.exit()
+        stream = streams[0]
+        if stream.get('codec_type') != 'audio':
+            for stream in streams:
+                if stream.get('codec_type') != 'audio':
+                    continue
+                else:
+                    break
+        channels = stream['channels']
+        samplerate = float(stream['sample_rate'])
+        blocksize = 1024
+        buffersize = 20
+        try:
+            print('Opening stream ...')
+            process = ffmpeg.input(streamurl).output('pipe:', format='avi', acodec='mp2', ac=channels, ar=samplerate, loglevel='quiet',).run_async(pipe_stdout=True)
+            read_size = blocksize * channels * 8
+            tmpframes = None
+            if os.path.exists(tempaudiofile):
+                ftmp = wave.open(tempaudiofile, "rb")
+                frmcnt = ftmp.getnframes()
+                tmpframes = ftmp.readframes(frmcnt)
+                ftmp.close()
+            twf = wave.open(tempaudiofile, 'wb') # Opening in append mode as we might need to append if the stream is dropped
+            twf.setnchannels(channels)
+            twf.setsampwidth(4) # Is this good enough?
+            twf.setframerate(samplerate)
+            if tmpframes is not None:
+                twf.writeframes(tmpframes)
+            lastread = time.time()
+            while True:
+                aframes = process.stdout.read(read_size)
+                if aframes.__len__() == 0:
+                    time.sleep(5) # A five second sleep.
+                    curtime = time.time()
+                    if curtime - lastread > 60: # We haven't received a frame for the past 1 minute
+                        try:
+                            process = ffmpeg.input(streamurl).output('pipe:', format='avi', acodec='mp2', ac=channels, ar=samplerate, loglevel='quiet',).run_async(pipe_stdout=True) # So we try to reconnect...
+                        except:
+                            break # ... failing which, we break.
+                        if not process: # If we somehow failed to create a stream, we quit.
+                            break
+                    continue
+                lastread = time.time()
+                twf.writeframes(aframes)
+            twf.close()
+        except Exception as e:
+            print(type(e).__name__ + ': ' + str(e))
+            sys.exit()
+        return None
+
+
     def capturelivestream(self, argslist):
-        streamurl, outnum, feedid, deviceindex, outfilename = argslist[0], argslist[1], argslist[2], argslist[3], argslist[4]
+        streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
         cap = cv2.VideoCapture(streamurl)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
         # check the incoming frame rate if we are in DEBUG mode
@@ -302,20 +375,15 @@ class VideoBot(object):
             fps_in = cap.get(cv2.CAP_PROP_FPS)
             print("Incoming frame rate: %s"%fps_in)
         #cap.set(cv2.CAP_PROP_FPS, 20) # Should we alter the frames rate and set it to 20 fps?
-        # Get audio stream, only if we received a valid device index
-        if deviceindex >= 0:
-            audio = pyaudio.PyAudio()
-            stream = audio.open(input_device_index=deviceindex, format=self.format, channels=self.channels, rate=self.rate, input=True, frames_per_buffer=self.frames_per_buffer)
-            stream.start_stream()
-            # Create a temporary file to write the frames periodically
-            fpath = os.path.dirname(outfilename)
-            fnamefext = os.path.basename(outfilename)
-            fname = fnamefext.split(".")[0]
-            tempaudiofile = fpath + os.path.sep + fname + ".wav"
-            twf = wave.open(tempaudiofile, 'wb')
-            twf.setnchannels(self.channels)
-            twf.setsampwidth(audio.get_sample_size(self.format))
-            twf.setframerate(self.rate)
+        # Get audio stream...
+        ta = None
+        fpath = os.path.dirname(outfilename)
+        fnamefext = os.path.basename(outfilename)
+        fname = fnamefext.split(".")[0]
+        tempaudiofile = fpath + os.path.sep + fname + ".wav"
+        ta = Thread(target=self.captureaudiostream, args=(streamurl, tempaudiofile))
+        ta.daemon = True
+        ta.start()
         lastcaptured = time.time()
         while True:
             if cap.isOpened():
@@ -326,10 +394,6 @@ class VideoBot(object):
                     if self.DEBUG == 2:
                         print("Put a frame in queue for out writer %s"%outnum)
                     #    self.show_frame(frame)
-                    # Read audio if we received a valid device index.
-                    if deviceindex >= 0:
-                        audiodata = stream.read(self.frames_per_buffer)
-                        twf.writeframes(audiodata)
                     time.sleep(self.FPS)
                 else:
                     if self.DEBUG:
@@ -351,6 +415,108 @@ class VideoBot(object):
                     if self.DEBUG: # Check incoming frame rate if DEBUG mode is set
                         fps_in = cap.get(cv2.CAP_PROP_FPS)
                         print("Feed %s reconnected. Incoming frame rate: %s"%(feedid, fps_in))
+                    # Reconnect audio stream...
+                    if ta is not None:
+                        ta.join() # End the previous thread
+                    ta = Thread(target=self.captureaudiostream, args=(streamurl, tempaudiofile))
+                    ta.daemon = True
+                    ta.start()
+                else: # Stream is not available anymore, so update feed record in DB
+                    if self.DEBUG:
+                        print("Stream %s is no longer available."%streamurl)
+                    curdatetime = datetime.datetime.now()
+                    pdbconn = MySQLdb.connect(host=self.dbhost, port=self.dbport, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
+                    #pdbconn = psycopg2.connect(database=self.dbname, user=self.dbuser, password=self.dbpasswd, host=self.dbhost, port=self.dbport)
+                    pcursor = pdbconn.cursor()
+                    updatesql = "update feedman_feeds set feedend='%s' where id=%s"%(curdatetime, feedid)
+                    if self.DEBUG:
+                        print(updatesql)
+                    try:
+                        pcursor.execute(updatesql)
+                        pdbconn.commit()
+                    except:
+                        print("Could not update db for the feed identified by Id %s"%feedid)
+                    pdbconn.close()
+                    break # Break out of infinite loop.
+        cap.release() # Done!
+        # End audio stream.
+        if ta is not None:
+            ta.join()
+        combinedfile = fpath + os.path.sep + fname + "_combined.avi"
+        print("Normal recording\nMuxing")
+        muxcmd = "ffmpeg -y -ac 1 -channel_layout mono -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
+        subprocess.call(muxcmd, shell=True)
+        #print("..")
+        if self.DEBUG:
+            cv2.destroyAllWindows()
+        # Exit process
+        sys.exit()
+
+
+    def capturelivestream_pyaudio(self, argslist):
+        streamurl, outnum, feedid, deviceindex, outfilename = argslist[0], argslist[1], argslist[2], argslist[3], argslist[4]
+        cap = cv2.VideoCapture(streamurl)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
+        # check the incoming frame rate if we are in DEBUG mode
+        if self.DEBUG:
+            fps_in = cap.get(cv2.CAP_PROP_FPS)
+            print("Incoming frame rate: %s"%fps_in)
+        #cap.set(cv2.CAP_PROP_FPS, 20) # Should we alter the frames rate and set it to 20 fps?
+        # Get audio stream, only if we received a valid device index
+        ta = None
+        if deviceindex >= 0:
+            audio = pyaudio.PyAudio()
+            #stream = audio.open(input_device_index=deviceindex, format=self.format, channels=self.channels, rate=self.rate, input=True, frames_per_buffer=self.frames_per_buffer)
+            stream = audio.open(format=self.format, channels=self.channels, rate=self.rate, input=True, frames_per_buffer=self.frames_per_buffer)
+            stream.start_stream()
+            # Create a temporary file to write the frames periodically
+            fpath = os.path.dirname(outfilename)
+            fnamefext = os.path.basename(outfilename)
+            fname = fnamefext.split(".")[0]
+            tempaudiofile = fpath + os.path.sep + fname + ".wav"
+            twf = wave.open(tempaudiofile, 'wb')
+            twf.setnchannels(self.channels)
+            twf.setsampwidth(audio.get_sample_size(self.format))
+            twf.setframerate(self.rate)
+            # Read audio since we received a valid device index. Start a thread to block on audio read.
+            ta = Thread(target=self.captureaudiostream, args=(stream, twf))
+            ta.daemon = True
+            ta.start()
+        lastcaptured = time.time()
+        while True:
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret == True:
+                    lastcaptured = time.time()
+                    self.processq.put([outnum, frame])
+                    if self.DEBUG == 2:
+                        print("Put a frame in queue for out writer %s"%outnum)
+                    #    self.show_frame(frame)
+                    time.sleep(self.FPS)
+                else:
+                    if self.DEBUG:
+                        print("Could not read frame for feed ID %s"%feedid)
+                    t = time.time()
+                    if t - lastcaptured > 5: # If the frames can't be read for more than 5 seconds, reopen the stream
+                        print("Reopening feed identified by feed ID %s"%feedid)
+                        cap.release()
+                        cap = cv2.VideoCapture(streamurl)
+                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
+                    continue
+            else: # Check if the streamurl is still having the feed
+                if self.DEBUG:
+                    print("Feed identified by ID %s has closed. Verifying availability of feed."%feedid)
+                retval = self.verifystream(streamurl)
+                if retval: # retval is True, so reconnect to the stream...
+                    cap = cv2.VideoCapture(streamurl)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 30)
+                    if self.DEBUG: # Check incoming frame rate if DEBUG mode is set
+                        fps_in = cap.get(cv2.CAP_PROP_FPS)
+                        print("Feed %s reconnected. Incoming frame rate: %s"%(feedid, fps_in))
+                    # Reconnect audio stream...
+                    ta = Thread(target=self.captureaudiostream, args=(stream, twf))
+                    ta.daemon = True
+                    ta.start()
                 else: # Stream is not available anymore, so update feed record in DB
                     if self.DEBUG:
                         print("Stream %s is no longer available."%streamurl)
@@ -371,6 +537,8 @@ class VideoBot(object):
         cap.release() # Done!
         # End audio stream if we opened one, i.e., if we received a valid device index.
         if deviceindex >= 0:
+            if ta is not None:
+                ta.join()
             stream.stop_stream()
             stream.close()
             audio.terminate()
@@ -571,6 +739,7 @@ if __name__ == "__main__":
     #dbconn = psycopg2.connect(database=itftennis.dbname, user=itftennis.dbuser, password=itftennis.dbpasswd, host=itftennis.dbhost, port=itftennis.dbport)
     cursor = dbconn.cursor()
     # Get the list of all microphones connect to the system:
+    """
     p_m = pyaudio.PyAudio()
     info = p_m.get_host_api_info_by_index(0)
     devicecount = info.get('deviceCount') # We hope we have enough devices... There could be 25 - 30 matches played simultaneously.
@@ -579,6 +748,7 @@ if __name__ == "__main__":
         if (p_m.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
             deviceslist.append(i)
             itftennis.devices_state[str(i)] = 0 # Device is free - initial state.
+    """
     feedidlist = []
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
@@ -625,13 +795,16 @@ if __name__ == "__main__":
                     except:
                         pass # Leave it if we can't get it. We can get it from the management interface.
                     # Check deviceslist and devices_state to find the lowest device index that is free. If no devices are free, assign an invalid device index: -1.
+                    """
                     selecteddevice = -1
                     for devindex in deviceslist:
                         if itftennis.devices_state[str(devindex)] == 0:
                             selecteddevice = devindex
                             itftennis.devices_state[str(devindex)] = 1
                             break
-                    argslist.append([streamurl, outnum, feedid, selecteddevice, outfilename])   
+                    argslist.append([streamurl, outnum, feedid, selecteddevice, outfilename])
+                    """
+                    argslist.append([streamurl, outnum, feedid, outfilename])   
                 else:
                     print("Couldn't get the stream url from page")
                 #if itftennis.DEBUG: # Let only a single stream be processed for debugging.

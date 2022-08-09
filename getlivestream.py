@@ -352,7 +352,7 @@ class VideoBot(object):
                     curtime = time.time()
                     if curtime - lastread > 60: # We haven't received a frame for the past 1 minute
                         try:
-                            process = ffmpeg.input(streamurl).output('pipe:', format='avi', acodec='mp2', ac=channels, ar=samplerate, loglevel='quiet',).run_async(pipe_stdout=True) # So we try to reconnect...
+                            process = ffmpeg.input(streamurl).output('pipe:', format='s16le', acodec='pcm_s16le', ac=channels, ar=samplerate, loglevel='quiet',).run_async(pipe_stdout=True) # So we try to reconnect...
                         except:
                             break # ... failing which, we break.
                         if not process: # If we somehow failed to create a stream, we quit.
@@ -440,18 +440,23 @@ class VideoBot(object):
                     pdbconn.close()
                     break # Break out of infinite loop.
         cap.release() # Done!
-        # End audio stream.
+        # End audio thread.
         if ta is not None:
+            if self.DEBUG:
+                print("Joining thread... ")
             ta.join()
+            if self.DEBUG:
+                print("Thread joined... ")
         combinedfile = fpath + os.path.sep + fname + "_combined.avi"
         print("Normal recording\nMuxing")
         muxcmd = "ffmpeg -y -ac 1 -channel_layout mono -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
         subprocess.call(muxcmd, shell=True)
         #print("..")
-        if self.DEBUG:
-            cv2.destroyAllWindows()
+        #if self.DEBUG:
+        #    cv2.destroyAllWindows()
         # Exit process
-        sys.exit()
+        #sys.exit()
+        return None
 
 
     def capturelivestream_pyaudio(self, argslist):
@@ -539,7 +544,11 @@ class VideoBot(object):
         # End audio stream if we opened one, i.e., if we received a valid device index.
         if deviceindex >= 0:
             if ta is not None:
+                if self.DEBUG:
+                    print("Joining thread... ")
                 ta.join()
+            if self.DEBUG:
+                print("Closing strean... ")
             stream.stop_stream()
             stream.close()
             audio.terminate()
@@ -739,22 +748,15 @@ if __name__ == "__main__":
     dbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
     #dbconn = psycopg2.connect(database=itftennis.dbname, user=itftennis.dbuser, password=itftennis.dbpasswd, host=itftennis.dbhost, port=itftennis.dbport)
     cursor = dbconn.cursor()
-    # Get the list of all microphones connect to the system:
-    """
-    p_m = pyaudio.PyAudio()
-    info = p_m.get_host_api_info_by_index(0)
-    devicecount = info.get('deviceCount') # We hope we have enough devices... There could be 25 - 30 matches played simultaneously.
-    deviceslist = []
-    for i in range(0, devicecount):
-        if (p_m.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
-            deviceslist.append(i)
-            itftennis.devices_state[str(i)] = 0 # Device is free - initial state.
-    """
     feedidlist = []
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
+    processeslist = []
     while True:
         streampageurls = itftennis.checkforlivestream()
+        if itftennis.DEBUG:
+            print("Checking for new urls...")
+            print(streampageurls.__len__())
         if streampageurls.__len__() > 0:
             argslist = []
             newurlscount = 0
@@ -795,24 +797,20 @@ if __name__ == "__main__":
                         feedid = int(feedrecs[0][0])
                     except:
                         pass # Leave it if we can't get it. We can get it from the management interface.
-                    # Check deviceslist and devices_state to find the lowest device index that is free. If no devices are free, assign an invalid device index: -1.
-                    """
-                    selecteddevice = -1
-                    for devindex in deviceslist:
-                        if itftennis.devices_state[str(devindex)] == 0:
-                            selecteddevice = devindex
-                            itftennis.devices_state[str(devindex)] = 1
-                            break
-                    argslist.append([streamurl, outnum, feedid, selecteddevice, outfilename])
-                    """
                     argslist.append([streamurl, outnum, feedid, outfilename])   
                 else:
                     print("Couldn't get the stream url from page")
-                #if itftennis.DEBUG: # Let only a single stream be processed for debugging.
-                #    break
             if newurlscount > 0:
-                p = Pool(newurlscount)
-                p.map(itftennis.capturelivestream, argslist)
+                #p = Pool(newurlscount)
+                #p.map(itftennis.capturelivestream, argslist) 
+                # With the above code the main process stalls. Should be investigated later.
+                for args in argslist:
+                    p = Process(target=itftennis.capturelivestream, args=(args,))
+                    p.start()
+                    processeslist.append(p)
+                    print("Started process with args %s"%args)
+                print("Created processes, continuing now...")
+                continue
         time.sleep(itftennis.livestreamcheckinterval)
     t.join()
     for out in outlist:

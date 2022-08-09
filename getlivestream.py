@@ -66,9 +66,9 @@ def handler(signum, frame):
         print("")
         exit(1)
     else:
-        print("", end="\r", flush=True)
+        print("", end="\n", flush=True)
         print(" " * len(msg), end="", flush=True) # clear the printed line
-        print("    ", end="\r", flush=True)
+        print("    ", end="\n", flush=True)
  
 
 
@@ -148,6 +148,9 @@ class VideoBot(object):
         self.time_limit = 86400 # time in seconds (1 day), for recording. Event will end before this, and we need to be able to recognize it.
         mgr = mp.Manager()
         self.processq = mgr.Queue(maxsize=10000)
+        self.statusq = []
+        for i in range(10000):
+            self.statusq.append(1) # Default status is active
         self.size = (320, 180)
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
         # itftennis streams have a rate of 25 fps.
@@ -306,7 +309,7 @@ class VideoBot(object):
         return None # Just to satisfy the Thread module's need for explicitly ending the thread
 
 
-    def captureaudiostream(self, streamurl, tempaudiofile):
+    def captureaudiostream(self, streamurl, tempaudiofile, qctr):
         try:
             info = ffmpeg.probe(streamurl, select_streams='a')
         except:
@@ -346,6 +349,8 @@ class VideoBot(object):
                 twf.writeframes(tmpframes)
             lastread = time.time()
             while True:
+                if self.statusq[qctr] == 0:
+                    break
                 aframes = process.stdout.read(read_size)
                 if aframes.__len__() == 0:
                     time.sleep(5) # A five second sleep.
@@ -353,6 +358,9 @@ class VideoBot(object):
                     if curtime - lastread > 60: # We haven't received a frame for the past 1 minute
                         try:
                             process = ffmpeg.input(streamurl).output('pipe:', format='s16le', acodec='pcm_s16le', ac=channels, ar=samplerate, loglevel='quiet',).run_async(pipe_stdout=True) # So we try to reconnect...
+                            aframes = process.stdout.read(read_size) # Try to read one more time...
+                            if aframes.__len__() == 0: # If we still can't get any frames...
+                                break  # ... then quit.
                         except:
                             break # ... failing which, we break.
                         if not process: # If we somehow failed to create a stream, we quit.
@@ -382,7 +390,8 @@ class VideoBot(object):
         fnamefext = os.path.basename(outfilename)
         fname = fnamefext.split(".")[0]
         tempaudiofile = fpath + os.path.sep + fname + ".wav"
-        ta = Thread(target=self.captureaudiostream, args=(streamurl, tempaudiofile))
+        self.statusq[outnum] = 1
+        ta = Thread(target=self.captureaudiostream, args=(streamurl, tempaudiofile, outnum))
         ta.daemon = True
         ta.start()
         lastcaptured = time.time()
@@ -419,7 +428,7 @@ class VideoBot(object):
                     # Reconnect audio stream...
                     if ta is not None:
                         ta.join() # End the previous thread
-                    ta = Thread(target=self.captureaudiostream, args=(streamurl, tempaudiofile))
+                    ta = Thread(target=self.captureaudiostream, args=(streamurl, tempaudiofile, outnum))
                     ta.daemon = True
                     ta.start()
                 else: # Stream is not available anymore, so update feed record in DB
@@ -441,19 +450,19 @@ class VideoBot(object):
                     break # Break out of infinite loop.
         cap.release() # Done!
         # End audio thread.
+        self.statusq[outnum] = 0 # Signal the audio capture thread to quit.
         if ta is not None:
             if self.DEBUG:
                 print("Joining thread... ")
             ta.join()
             if self.DEBUG:
                 print("Thread joined... ")
-        combinedfile = fpath + os.path.sep + fname + "_combined.avi"
+        if not os.path.isdir(fpath+os.path.sep+"final"):
+            os.makedirs(fpath+os.path.sep+"final")
+        combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
         print("Normal recording\nMuxing")
         muxcmd = "ffmpeg -y -ac 1 -channel_layout mono -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
         subprocess.call(muxcmd, shell=True)
-        #print("..")
-        #if self.DEBUG:
-        #    cv2.destroyAllWindows()
         # Exit process
         #sys.exit()
         return None
@@ -808,7 +817,8 @@ if __name__ == "__main__":
                     p = Process(target=itftennis.capturelivestream, args=(args,))
                     p.start()
                     processeslist.append(p)
-                    print("Started process with args %s"%args)
+                    if itftennis.DEBUG:
+                        print("Started process with args %s"%args)
                 print("Created processes, continuing now...")
                 continue
         time.sleep(itftennis.livestreamcheckinterval)

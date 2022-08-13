@@ -292,7 +292,6 @@ class VideoBot(object):
         buffersize = 20
         try:
             print('Opening stream ...')
-            #channels = 1 # Hard code to 1
             process = ffmpeg.input(streamurl).output('pipe:', format='s16le', acodec='pcm_s16le', ac=channels, ar=samplerate, loglevel='quiet',).run_async(pipe_stdout=True)
             read_size = blocksize * channels * 8
             tmpframes = None
@@ -337,8 +336,7 @@ class VideoBot(object):
 
     def capturelivestream(self, argslist):
         streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
-        #process = ffmpeg.input(streamurl).output('pipe:', format='h264', vcodec='mpeg4', vtag='xvid', loglevel='quiet',).run_async(pipe_stdout=True)
-        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='rawvideo', loglevel='quiet').run_async(pipe_stdout=True)
+        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', loglevel='quiet').run_async(pipe_stdout=True)
         # Get audio stream...
         ta = None
         fpath = os.path.dirname(outfilename)
@@ -349,7 +347,7 @@ class VideoBot(object):
         ta = Thread(target=self.captureaudiostream, args=(streamurl, tempaudiofile, outnum))
         ta.daemon = True
         ta.start()
-        read_size = 1280 * 720 * 3 # This is width * height * 3 (fps = 25)
+        read_size = 1280 * 720 * 1 # This is width * height * 1
         lastcaptured = time.time()
         maxtries = 12
         ntries = 0
@@ -357,7 +355,7 @@ class VideoBot(object):
             if process:
                 inbytes = process.stdout.read(read_size)
                 if inbytes is not None and inbytes.__len__() > 0:
-                    frame = (np.frombuffer(inbytes, np.uint8).reshape([1280, 720, 3]))
+                    frame = (np.frombuffer(inbytes, np.uint8).reshape([1280, 720, 1]))
                     self.processq.put([outnum, frame])
                     lastcaptured = time.time()
                     ntries = 0
@@ -367,8 +365,7 @@ class VideoBot(object):
                     t = time.time()
                     if t - lastcaptured > 5: # If the frames can't be read for more than 5 seconds, reopen the stream
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        #process = ffmpeg.input(streamurl).output('pipe:', format='h264', vcodec='mpeg4', vtag='xvid', loglevel='quiet',).run_async(pipe_stdout=True)
-                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='rawvideo', loglevel='quiet').run_async(pipe_stdout=True)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:
@@ -589,7 +586,6 @@ if __name__ == "__main__":
     t.start()
     # Create a database connection and as associated cursor object. We will handle database operations from main thread only.
     dbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
-    #dbconn = psycopg2.connect(database=itftennis.dbname, user=itftennis.dbuser, password=itftennis.dbpasswd, host=itftennis.dbhost, port=itftennis.dbport)
     cursor = dbconn.cursor()
     feedidlist = []
     vidsdict = {}
@@ -619,14 +615,17 @@ if __name__ == "__main__":
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
                     outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
-                    #out = cv2.VideoWriter(outfilename, itftennis.fourcc, 1/itftennis.FPS, itftennis.size)
+                    fpath = os.path.dirname(outfilename)
+                    fnamefext = os.path.basename(outfilename)
+                    fname = fnamefext.split(".")[0]
+                    combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
                     out = open(outfilename, "wb")
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
                     # Now, get feed metadata...
                     metadata = itftennis.getfeedmetadata(streampageurl)
                     # Save metadata in DB
-                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('%s', '%s', '%s', '%s', null, '%s', 'live', '%s', FALSE, '%s', 1)"%(metadata['FeedTitle'], metadata['FeedEventTeam1'], metadata['FeedEventTeam2'], metadata['FeedStartTime'], metadata['FeedEventType'], outfilename, datetime.datetime.now()) # The supplied user Id value of 1 is reserved for this script.
+                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('%s', '%s', '%s', '%s', null, '%s', 'live', '%s', FALSE, '%s', 1)"%(metadata['FeedTitle'], metadata['FeedEventTeam1'], metadata['FeedEventTeam2'], metadata['FeedStartTime'], metadata['FeedEventType'], combinedfile, datetime.datetime.now()) # The supplied user Id value of 1 is reserved for this script.
                     try:
                         cursor.execute(feedinsertsql)
                         dbconn.commit() # Just in case autocommit is not set.
@@ -645,9 +644,6 @@ if __name__ == "__main__":
                 else:
                     print("Couldn't get the stream url from page")
             if newurlscount > 0:
-                #p = Pool(newurlscount)
-                #p.map(itftennis.capturelivestream, argslist) 
-                # With the above code the main process stalls. Should be investigated later.
                 for args in argslist:
                     p = Process(target=itftennis.capturelivestream, args=(args,))
                     p.start()

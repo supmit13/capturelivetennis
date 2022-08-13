@@ -343,7 +343,35 @@ def sendmail(request):
     pass
 
 
+@login_required(login_url='/feedauth/showlogin/')
+@csrf_protect
+def getfeedpath(request):
+    if request.method != 'POST':
+        message = "Invalid method of call"
+        return HttpResponse(json.dumps({'err' : message}))
+    if not request.user.is_authenticated:
+        message = "Your session is invalid. Please login to perform this operation"
+        return HttpResponse(json.dumps({'err' : message}))
+    requestbody = str(request.body)
+    requestdict = urllib.parse.parse_qs(requestbody)
+    feedid = requestdict['feedid']
+    feedobj = None
+    try:
+        feedobj = Feed.objects.get(id=feedid)
+    except:
+        print("Could not retrieve feed object identified by Id %s"%feedid)
+        return HttpResponse(json.dumps({'err' : "Could not retrieve feed object identified by Id %s"%feedid}))
+    feedpath_os = feedobj.feedpath
+    feedpathparts = feedpath_os.split(os.path.sep)
+    feedpathparts[0] = "media"
+    feedpathweb = "/".join(feedpathparts)
+    respdict = {'feedpath' : feedpathweb}
+    return HttpResponse(json.dumps(respdict))
 
 
-
+"""
+@login_required(login_url='/feedauth/showlogin/')
+def showfeed(request):
+    pass
+"""
 

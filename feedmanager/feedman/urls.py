@@ -13,5 +13,7 @@ urlpatterns = [
     path('searchfeeds/', views.searchfeeds, name='searchfeeds'),
     path('settings/', views.feedsettings, name='feedsettings'),
     path('sendmail/', views.sendmail, name='sendmail'),
+    #path('showfeed/', views.showfeed, name='showfeed'),
+    path('getfeedpath/', views.getfeedpath, name='getfeedpath')
 ]
 

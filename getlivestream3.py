@@ -160,7 +160,6 @@ class VideoBot(object):
         self.rate = 44100
         self.frames_per_buffer = 1024
         self.channels = 1
-        #self.format = pyaudio.paInt16
         self.devices_state = {}
         # Other params
         self.DEBUG = 1 # TODO: Remember to set it to 0 (or False) before deploying somewhere.
@@ -338,7 +337,8 @@ class VideoBot(object):
 
     def capturelivestream(self, argslist):
         streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
-        process = ffmpeg.input(streamurl).output('pipe:', format='mp4', vcodec='mjpeg', loglevel='quiet',).run_async(pipe_stdout=True)
+        #process = ffmpeg.input(streamurl).output('pipe:', format='h264', vcodec='mpeg4', vtag='xvid', loglevel='quiet',).run_async(pipe_stdout=True)
+        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='rawvideo', loglevel='quiet').run_async(pipe_stdout=True)
         # Get audio stream...
         ta = None
         fpath = os.path.dirname(outfilename)
@@ -349,16 +349,16 @@ class VideoBot(object):
         ta = Thread(target=self.captureaudiostream, args=(streamurl, tempaudiofile, outnum))
         ta.daemon = True
         ta.start()
-        read_size = self.frames_per_buffer
+        read_size = 1280 * 720 * 3 # This is width * height * 3 (fps = 25)
         lastcaptured = time.time()
         maxtries = 12
         ntries = 0
         while True:
             if process:
-                frames = process.stdout.read(read_size)
-                for frame in frames:
+                inbytes = process.stdout.read(read_size)
+                if inbytes is not None and inbytes.__len__() > 0:
+                    frame = (np.frombuffer(inbytes, np.uint8).reshape([1280, 720, 3]))
                     self.processq.put([outnum, frame])
-                if frames.__len__() > 0:
                     lastcaptured = time.time()
                     ntries = 0
                 else:
@@ -367,7 +367,8 @@ class VideoBot(object):
                     t = time.time()
                     if t - lastcaptured > 5: # If the frames can't be read for more than 5 seconds, reopen the stream
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        process = ffmpeg.input(streamurl).output('pipe:', format='mp4', vcodec='mjpeg', loglevel='quiet',).run_async(pipe_stdout=True)
+                        #process = ffmpeg.input(streamurl).output('pipe:', format='h264', vcodec='mpeg4', vtag='xvid', loglevel='quiet',).run_async(pipe_stdout=True)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='rawvideo', loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:
@@ -421,7 +422,7 @@ class VideoBot(object):
                 if self.DEBUG == 2:
                     print("Could not get writer %s"%outnum)
                 continue
-            if frame is not None and out.isOpened():
+            if frame is not None and out is not None:
                 out.write(frame)
                 #print("Wrote a frame to %s..."%outnum)
                 isempty = False
@@ -618,7 +619,8 @@ if __name__ == "__main__":
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
                     outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
-                    out = cv2.VideoWriter(outfilename, itftennis.fourcc, 1/itftennis.FPS, itftennis.size)
+                    #out = cv2.VideoWriter(outfilename, itftennis.fourcc, 1/itftennis.FPS, itftennis.size)
+                    out = open(outfilename, "wb")
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
                     # Now, get feed metadata...
@@ -657,7 +659,7 @@ if __name__ == "__main__":
         time.sleep(itftennis.livestreamcheckinterval)
     t.join()
     for out in outlist:
-        out.release()
+        out.close()
     dbconn.close() # Close and keep environment clean.
 
 

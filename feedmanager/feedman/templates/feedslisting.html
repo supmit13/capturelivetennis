@@ -335,6 +335,32 @@
 	xmlhttp.send(postdata);
     }
 
+
+    function showfeed(feedid){
+        postdata = "feedid=" + feedid;
+        csrf = document.frmdummy.csrfmiddlewaretoken.value;
+  	postdata = postdata + "&csrfmiddlewaretoken=" + csrf;
+        var xmlhttp;
+	if (window.XMLHttpRequest){
+	    xmlhttp=new XMLHttpRequest();
+	}
+	else{
+	    xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+	}
+	// Register the handler
+	xmlhttp.onreadystatechange = function(){
+	if(xmlhttp.readyState == 4 && xmlhttp.status==200){
+	    rdict = JSON.parse(xmlhttp.responseText);
+            feedwebpath = rdict['feedpath'];
+	    feedwin = window.open("", "fdw", "toolbar=no,scrollbars=yes,addressbar=no,resizable=yes,width=320,height=180");
+            feedwin.document.write("<html><body><video width='320' height='180' controls><source src='" + feedwebpath + "' type='video/avi'></video></body></html>");
+	}
+	};
+	xmlhttp.open("POST", "/feedman/getfeedpath/", true);
+	xmlhttp.setRequestHeader("X-CSRFToken", csrf);
+	xmlhttp.send(postdata);
+    }
+
     </script>
 </head>
 
@@ -581,7 +607,7 @@
                                                 <td style="white-space:nowrap;">{{feed.player2|linebreaksbr}}</td>
 						<td style="white-space:nowrap;">{{feed.matchdate}}</td>
 						<td style="white-space:nowrap;">{{feed.matchtype}}</td>
-						<td style="white-space:nowrap;">{{feed.result}}</td>
+						<td style="white-space:nowrap;"><a href='#/' onclick='javascript:showfeed({{feed.fid}});'>Show Feed</a></td>
 						<td style="white-space:nowrap;"><input type='checkbox' name='chk_{{feed.fid}}' id='chk_{{feed.fid}}' value="{{feed.fid}}">&nbsp;&nbsp;<a href="#" onclick="javascript:editfeed({{feed.fid}});"><img src="/static/images/editicon.png"></a>&nbsp;&nbsp;<a href="#" onclick="javascript:deletefeed({{feed.fid}});"><img src="/static/images/deleteicon.png"></a></td>
                                             </tr>
 					    {% endfor %}

@@ -355,7 +355,13 @@ class VideoBot(object):
             if process:
                 inbytes = process.stdout.read(read_size)
                 if inbytes is not None and inbytes.__len__() > 0:
-                    frame = (np.frombuffer(inbytes, np.uint8).reshape([1280, 720, 1]))
+                    try:
+                        frame = (np.frombuffer(inbytes, np.uint8).reshape([1280, 720, 1]))
+                    except:
+                        try:
+                            frame = (np.frombuffer(inbytes, np.uint8).reshape([320, 180, 1]))
+                        except:
+                            continue # This could be an issue if there is a continuous supply of frames that cannot be reshaped
                     self.processq.put([outnum, frame])
                     lastcaptured = time.time()
                     ntries = 0

@@ -4,6 +4,7 @@ import urllib, urllib.request
 from bs4 import BeautifulSoup
 import unicodedata
 import io
+import shutil
 import gzip
 import time
 import signal, readchar
@@ -269,84 +270,12 @@ class VideoBot(object):
         return True
 
 
-    def captureaudiostream(self, streamurl, tempaudiofile, qctr):
-        try:
-            info = ffmpeg.probe(streamurl, select_streams='a')
-        except:
-            sys.stderr.buffer.write(sys.exc_info()[1].__str__())
-            sys.exit() # End the thread.
-        streams = info.get('streams', [])
-        if len(streams) == 0:
-            print('There are no streams available')
-            sys.exit()
-        stream = streams[0]
-        if stream.get('codec_type') != 'audio':
-            for stream in streams:
-                if stream.get('codec_type') != 'audio':
-                    continue
-                else:
-                    break
-        channels = stream['channels']
-        samplerate = float(stream['sample_rate'])
-        blocksize = 1024
-        buffersize = 20
-        try:
-            print('Opening stream ...')
-            process = ffmpeg.input(streamurl).output('pipe:', format='s16le', acodec='pcm_s16le', ac=channels, ar=samplerate, loglevel='quiet',).run_async(pipe_stdout=True)
-            read_size = blocksize * channels * 8
-            tmpframes = None
-            if os.path.exists(tempaudiofile):
-                ftmp = wave.open(tempaudiofile, "rb")
-                frmcnt = ftmp.getnframes()
-                tmpframes = ftmp.readframes(frmcnt)
-                ftmp.close()
-            twf = wave.open(tempaudiofile, 'wb') # Opening in append mode as we might need to append if the stream is dropped
-            twf.setnchannels(channels)
-            twf.setsampwidth(2) # Is this good enough?
-            twf.setframerate(samplerate)
-            if tmpframes is not None:
-                twf.writeframes(tmpframes)
-            lastread = time.time()
-            while True:
-                if self.statusq[qctr] == 0:
-                    break
-                aframes = process.stdout.read(read_size)
-                if aframes.__len__() == 0:
-                    time.sleep(5) # A five second sleep.
-                    curtime = time.time()
-                    if curtime - lastread > 60: # We haven't received a frame for the past 1 minute
-                        try:
-                            process = ffmpeg.input(streamurl).output('pipe:', format='s16le', acodec='pcm_s16le', ac=channels, ar=samplerate, loglevel='quiet',).run_async(pipe_stdout=True) # So we try to reconnect...
-                            aframes = process.stdout.read(read_size) # Try to read one more time...
-                            if aframes.__len__() == 0: # If we still can't get any frames...
-                                break  # ... then quit.
-                        except:
-                            break # ... failing which, we break.
-                        if not process: # If we somehow failed to create a stream, we quit.
-                            break
-                    continue
-                lastread = time.time()
-                twf.writeframes(aframes)
-            twf.close()
-        except Exception as e:
-            print(type(e).__name__ + ': ' + str(e))
-            sys.exit()
-        return None
-
-
     def capturelivestream(self, argslist):
         streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
         process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', loglevel='quiet').run_async(pipe_stdout=True)
-        # Get audio stream...
-        ta = None
         fpath = os.path.dirname(outfilename)
         fnamefext = os.path.basename(outfilename)
         fname = fnamefext.split(".")[0]
-        tempaudiofile = fpath + os.path.sep + fname + ".wav"
-        self.statusq[outnum] = 1
-        ta = Thread(target=self.captureaudiostream, args=(streamurl, tempaudiofile, outnum))
-        ta.daemon = True
-        ta.start()
         read_size = 1280 * 720 * 1 # This is width * height * 1
         lastcaptured = time.time()
         maxtries = 12
@@ -378,7 +307,6 @@ class VideoBot(object):
                             print("Stream %s is no longer available."%streamurl)
                         curdatetime = datetime.datetime.now()
                         pdbconn = MySQLdb.connect(host=self.dbhost, port=self.dbport, user=self.dbuser, passwd=self.dbpasswd, db=self.dbname)
-                        #pdbconn = psycopg2.connect(database=self.dbname, user=self.dbuser, password=self.dbpasswd, host=self.dbhost, port=self.dbport)
                         pcursor = pdbconn.cursor()
                         updatesql = "update feedman_feeds set feedend='%s' where id=%s"%(curdatetime, feedid)
                         if self.DEBUG:
@@ -391,20 +319,10 @@ class VideoBot(object):
                         pdbconn.close()
                         break # Break out of infinite loop.
                     continue
-        # End audio thread.
-        self.statusq[outnum] = 0 # Signal the audio capture thread to quit.
-        if ta is not None:
-            if self.DEBUG:
-                print("Joining thread... ")
-            ta.join()
-            if self.DEBUG:
-                print("Thread joined... ")
         if not os.path.isdir(fpath+os.path.sep+"final"):
             os.makedirs(fpath+os.path.sep+"final")
         combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
-        print("Normal recording\nMuxing")
-        muxcmd = "ffmpeg -y -ac 1 -channel_layout mono -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
-        subprocess.call(muxcmd, shell=True)
+        shutil.copy(outfilename, combinedfile)
         # Exit process
         #sys.exit()
         return None

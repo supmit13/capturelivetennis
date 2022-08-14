@@ -322,9 +322,15 @@ class VideoBot(object):
         if not os.path.isdir(fpath+os.path.sep+"final"):
             os.makedirs(fpath+os.path.sep+"final")
         combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
-        shutil.copy(outfilename, combinedfile)
-        # Exit process
-        #sys.exit()
+        # Process the video for enhancing resolution: Set destination aspect ratio (dar) as 16/9, scale up to 1920x1080,
+        # preset is set to "slow" (for better compression), const. rate factor (crf) to 18 (for good visual quality).
+        cmd = "ffmpeg -i %s -vf scale=1920:1080,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
+        try:
+            subprocess.call(cmd, shell=True)
+        except:
+            pass
+        if not os.path.exists(combinedfile): # The above command encountered some error...
+            shutil.copy(outfilename, combinedfile) # ...so just copy the video to the final location.
         return None
 
 
@@ -604,6 +610,7 @@ https://blog.carlesmateo.com/2021/07/07/a-small-python-mysql-docker-program-as-a
 https://stackoverflow.com/questions/27947865/docker-how-to-restart-process-inside-of-container
 https://towardsdatascience.com/extracting-audio-from-video-using-python-58856a940fd
 https://kkroening.github.io/ffmpeg-python/
+https://ottverse.com/change-resolution-resize-scale-video-using-ffmpeg/
 """
 # Dev: Supriyo Mitra
 # Date: 28-07-2022

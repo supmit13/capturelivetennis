@@ -272,7 +272,7 @@ class VideoBot(object):
 
     def capturelivestream(self, argslist):
         streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
-        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', loglevel='quiet').run_async(pipe_stdout=True)
+        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', crf=18,  loglevel='quiet').run_async(pipe_stdout=True)
         fpath = os.path.dirname(outfilename)
         fnamefext = os.path.basename(outfilename)
         fname = fnamefext.split(".")[0]
@@ -300,7 +300,7 @@ class VideoBot(object):
                     t = time.time()
                     if t - lastcaptured > 5: # If the frames can't be read for more than 5 seconds, reopen the stream
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', loglevel='quiet').run_async(pipe_stdout=True)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', crf=18, loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:

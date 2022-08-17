@@ -302,7 +302,7 @@ class VideoBot(object):
                 frmcnt = ftmp.getnframes()
                 tmpframes = ftmp.readframes(frmcnt)
                 ftmp.close()
-            twf = wave.open(tempaudiofile, 'wb') # Opening in append mode as we might need to append if the stream is dropped
+            twf = wave.open(tempaudiofile, 'wb')
             twf.setnchannels(channels)
             twf.setsampwidth(2) # Is this good enough?
             twf.setframerate(samplerate)

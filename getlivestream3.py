@@ -272,7 +272,7 @@ class VideoBot(object):
 
     def capturelivestream(self, argslist):
         streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
-        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', crf=18, async=1,  loglevel='quiet').run_async(pipe_stdout=True)
+        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', crf=18, async=1,  loglevel='quiet').run_async(pipe_stdout=True)
         fpath = os.path.dirname(outfilename)
         fnamefext = os.path.basename(outfilename)
         fname = fnamefext.split(".")[0]
@@ -300,7 +300,7 @@ class VideoBot(object):
                     t = time.time()
                     if t - lastcaptured > 5: # If the frames can't be read for more than 5 seconds, reopen the stream
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', crf=18, async=1,  loglevel='quiet').run_async(pipe_stdout=True)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', crf=18, async=1,  loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:
@@ -322,6 +322,7 @@ class VideoBot(object):
         if not os.path.isdir(fpath+os.path.sep+"final"):
             os.makedirs(fpath+os.path.sep+"final")
         combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
+        """
         # Process the video for enhancing resolution: Set destination aspect ratio (dar) as 16/9,
         # preset is set to "slow" (for better compression), const. rate factor (crf) to 18 (for good visual quality).
         cmd = "ffmpeg -i %s -async 1 -vf setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
@@ -330,8 +331,9 @@ class VideoBot(object):
             subprocess.call(cmd, shell=True)
         except:
             pass
-        if not os.path.exists(combinedfile): # The above command encountered some error...
-            shutil.copy(outfilename, combinedfile) # ...so just copy the video to the final location.
+        """
+        if not os.path.exists(combinedfile):
+            shutil.copy(outfilename, combinedfile) # We are not doing any fancy stuff as it makes the resolution crappy, so just copy the video to the final location.
         return None
 
 
@@ -613,6 +615,11 @@ https://towardsdatascience.com/extracting-audio-from-video-using-python-58856a94
 https://kkroening.github.io/ffmpeg-python/
 https://ottverse.com/change-resolution-resize-scale-video-using-ffmpeg/
 https://lzone.de/blog/Easily-fix-async-video-with-ffmpeg
+https://www.analyticsvidhya.com/blog/2021/08/sharpening-an-image-using-opencv-library-in-python/
+https://github.com/Mukosame/Zooming-Slow-Mo-CVPR-2020
+https://pyimagesearch.com/2020/11/09/opencv-super-resolution-with-deep-learning/
+https://learnopencv.com/super-resolution-in-opencv/
+https://github.com/Saafke/FSRCNN_Tensorflow/blob/master/models/FSRCNN_x3.pb
 """
 # Dev: Supriyo Mitra
 # Date: 28-07-2022

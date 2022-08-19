@@ -338,7 +338,7 @@ class VideoBot(object):
 
     def capturelivestream(self, argslist):
         streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
-        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', crf=18,  loglevel='quiet').run_async(pipe_stdout=True)
+        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', crf=18,  loglevel='quiet').run_async(pipe_stdout=True)
         # Get audio stream...
         ta = None
         fpath = os.path.dirname(outfilename)
@@ -374,7 +374,7 @@ class VideoBot(object):
                     t = time.time()
                     if t - lastcaptured > 5: # If the frames can't be read for more than 5 seconds, reopen the stream
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='mpeg4', crf=18, loglevel='quiet').run_async(pipe_stdout=True)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', crf=18, loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:
@@ -409,8 +409,6 @@ class VideoBot(object):
         print("Normal recording\nMuxing")
         muxcmd = "ffmpeg -y -ac 1 -channel_layout mono -itsoffset 1.5 -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
         subprocess.call(muxcmd, shell=True)
-        # Exit process
-        #sys.exit()
         return None
 
 
@@ -692,6 +690,11 @@ https://stackoverflow.com/questions/27947865/docker-how-to-restart-process-insid
 https://towardsdatascience.com/extracting-audio-from-video-using-python-58856a940fd
 https://kkroening.github.io/ffmpeg-python/
 https://www.geekyhacker.com/2020/05/17/synchronize-audio-and-video-with-ffmpeg/
+https://www.analyticsvidhya.com/blog/2021/08/sharpening-an-image-using-opencv-library-in-python/
+https://github.com/Mukosame/Zooming-Slow-Mo-CVPR-2020
+https://pyimagesearch.com/2020/11/09/opencv-super-resolution-with-deep-learning/
+https://learnopencv.com/super-resolution-in-opencv/
+https://github.com/Saafke/FSRCNN_Tensorflow/blob/master/models/FSRCNN_x3.pb
 """
 # Dev: Supriyo Mitra
 # Date: 28-07-2022

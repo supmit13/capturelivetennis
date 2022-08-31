@@ -272,11 +272,12 @@ class VideoBot(object):
 
     def capturelivestream(self, argslist):
         streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
-        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', crf=18, async=1,  loglevel='quiet').run_async(pipe_stdout=True)
+        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', async=1,  loglevel='quiet').run_async(pipe_stdout=True)
         fpath = os.path.dirname(outfilename)
         fnamefext = os.path.basename(outfilename)
         fname = fnamefext.split(".")[0]
-        read_size = 1280 * 720 * 1 # This is width * height * 1
+        #read_size = 1280 * 720 * 1 # This is width * height * 1
+        read_size = 320 * 180 * 1 # This is width * height * 1
         lastcaptured = time.time()
         maxtries = 12
         ntries = 0
@@ -285,12 +286,9 @@ class VideoBot(object):
                 inbytes = process.stdout.read(read_size)
                 if inbytes is not None and inbytes.__len__() > 0:
                     try:
-                        frame = (np.frombuffer(inbytes, np.uint8).reshape([1280, 720, 1]))
+                        frame = (np.frombuffer(inbytes, np.uint8).reshape([320, 180, 1]))
                     except:
-                        try:
-                            frame = (np.frombuffer(inbytes, np.uint8).reshape([320, 180, 1]))
-                        except:
-                            continue # This could be an issue if there is a continuous supply of frames that cannot be reshaped
+                        continue # This could be an issue if there is a continuous supply of frames that cannot be reshaped
                     self.processq.put([outnum, frame])
                     lastcaptured = time.time()
                     ntries = 0
@@ -298,9 +296,9 @@ class VideoBot(object):
                     if self.DEBUG:
                         print("Could not read frame for feed ID %s"%feedid)
                     t = time.time()
-                    if t - lastcaptured > 5: # If the frames can't be read for more than 5 seconds, reopen the stream
-                        print("Reopening feed identified by feed ID %s"%feedid)
-                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', crf=18, async=1,  loglevel='quiet').run_async(pipe_stdout=True)
+                    if t - lastcaptured > 300: # If the frames can't be read for more than 300 seconds...
+                        #print("Reopening feed identified by feed ID %s"%feedid)
+                        #process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', async=1,  loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:
@@ -322,18 +320,17 @@ class VideoBot(object):
         if not os.path.isdir(fpath+os.path.sep+"final"):
             os.makedirs(fpath+os.path.sep+"final")
         combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
-        """
         # Process the video for enhancing resolution: Set destination aspect ratio (dar) as 16/9,
         # preset is set to "slow" (for better compression), const. rate factor (crf) to 18 (for good visual quality).
-        cmd = "ffmpeg -i %s -async 1 -vf setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
+        cmd = "ffmpeg -y -i %s -async 1  -pix_fmt yuv420p -vcodec libx264 -vf scale=1280:720,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
         #cmd = "ffmpeg -i %s -vf scale=1920:1080,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
         try:
             subprocess.call(cmd, shell=True)
         except:
             pass
-        """
         if not os.path.exists(combinedfile):
             shutil.copy(outfilename, combinedfile) # We are not doing any fancy stuff as it makes the resolution crappy, so just copy the video to the final location.
+            #os.unlink(outfilename) # Remove the file as we have it copied to "final" dir.
         return None
 
 

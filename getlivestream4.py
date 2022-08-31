@@ -274,7 +274,7 @@ class VideoBot(object):
         try:
             info = ffmpeg.probe(streamurl, select_streams='a')
         except:
-            sys.stderr.buffer.write(sys.exc_info()[1].__str__())
+            sys.stderr.buffer.write(sys.exc_info()[1].__str__().encode('utf-8'))
             sys.exit() # End the thread.
         streams = info.get('streams', [])
         if len(streams) == 0:
@@ -407,7 +407,7 @@ class VideoBot(object):
             os.makedirs(fpath+os.path.sep+"final")
         combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
         print("Normal recording\nMuxing")
-        muxcmd = "ffmpeg -y -ac 1 -channel_layout mono -itsoffset 1.5 -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
+        muxcmd = "ffmpeg -y -ac 1 -channel_layout mono -itsoffset 1.5 -crf 18 -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
         subprocess.call(muxcmd, shell=True)
         return None
 

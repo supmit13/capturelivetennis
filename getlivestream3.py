@@ -148,7 +148,7 @@ class VideoBot(object):
         self.chunk_size = 1024
         self.time_limit = 86400 # time in seconds (1 day), for recording. Event will end before this, and we need to be able to recognize it.
         mgr = mp.Manager()
-        self.processq = mgr.Queue(maxsize=10000)
+        self.processq = mgr.Queue(maxsize=1000000)
         self.statusq = []
         for i in range(10000):
             self.statusq.append(1) # Default status is active
@@ -296,9 +296,9 @@ class VideoBot(object):
                     if self.DEBUG:
                         print("Could not read frame for feed ID %s"%feedid)
                     t = time.time()
-                    if t - lastcaptured > 300: # If the frames can't be read for more than 300 seconds...
-                        #print("Reopening feed identified by feed ID %s"%feedid)
-                        #process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', async=1,  loglevel='quiet').run_async(pipe_stdout=True)
+                    if t - lastcaptured > 60: # If the frames can't be read for more than 60 seconds...
+                        print("Reopening feed identified by feed ID %s"%feedid)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', async=1,  loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:
@@ -322,14 +322,14 @@ class VideoBot(object):
         combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
         # Process the video for enhancing resolution: Set destination aspect ratio (dar) as 16/9,
         # preset is set to "slow" (for better compression), const. rate factor (crf) to 18 (for good visual quality).
-        cmd = "ffmpeg -y -i %s -async 1  -pix_fmt yuv420p -vcodec libx264 -vf scale=1280:720,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
+        cmd = "ffmpeg -y -i %s -pix_fmt yuv420p -vcodec libx264 -vf scale=1280:720,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
         #cmd = "ffmpeg -i %s -vf scale=1920:1080,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
         try:
             subprocess.call(cmd, shell=True)
         except:
             pass
         if not os.path.exists(combinedfile):
-            shutil.copy(outfilename, combinedfile) # We are not doing any fancy stuff as it makes the resolution crappy, so just copy the video to the final location.
+            shutil.copy(outfilename, combinedfile)
             #os.unlink(outfilename) # Remove the file as we have it copied to "final" dir.
         return None
 

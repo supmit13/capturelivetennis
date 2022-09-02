@@ -147,7 +147,7 @@ class VideoBot(object):
         self.chunk_size = 1024
         self.time_limit = 86400 # time in seconds (1 day), for recording. Event will end before this, and we need to be able to recognize it.
         mgr = mp.Manager()
-        self.processq = mgr.Queue(maxsize=10000)
+        self.processq = mgr.Queue(maxsize=1000000)
         self.statusq = []
         for i in range(10000):
             self.statusq.append(1) # Default status is active
@@ -338,7 +338,26 @@ class VideoBot(object):
 
     def capturelivestream(self, argslist):
         streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
-        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', crf=18,  loglevel='quiet').run_async(pipe_stdout=True)
+        ######### Additions on 03-09-2022 ###########
+        try:
+            info = ffmpeg.probe(streamurl, select_streams='v')
+        except:
+            sys.stderr.buffer.write(sys.exc_info()[1].__str__().encode('utf-8'))
+            sys.exit() # End the process.
+        streams = info.get('streams', [])
+        if len(streams) == 0:
+            print('There are no streams available')
+            sys.exit()
+        stream = streams[0]
+        if stream.get('codec_type') != 'video':
+            for stream in streams:
+                if stream.get('codec_type') != 'video':
+                    continue
+                else:
+                    break
+        fps = float(stream['r_frame_rate'])
+        ######### Additions end here ################
+        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='h264', crf=18, r=fps,  loglevel='quiet').run_async(pipe_stdout=True)
         # Get audio stream...
         ta = None
         fpath = os.path.dirname(outfilename)
@@ -352,7 +371,7 @@ class VideoBot(object):
         lastcaptured = time.time()
         read_size = 1280 * 720 * 1 # This is width * height * 1
         lastcaptured = time.time()
-        maxtries = 12
+        maxtries = 10
         ntries = 0
         while True:
             if process:
@@ -361,10 +380,7 @@ class VideoBot(object):
                     try:
                         frame = (np.frombuffer(inbytes, np.uint8).reshape([1280, 720, 1]))
                     except:
-                        try:
-                            frame = (np.frombuffer(inbytes, np.uint8).reshape([320, 180, 1]))
-                        except:
-                            continue # This could be an issue if there is a continuous supply of frames that cannot be reshaped
+                        continue # This could be an issue if there is a continuous supply of frames that cannot be reshaped
                     self.processq.put([outnum, frame])
                     lastcaptured = time.time()
                     ntries = 0
@@ -372,9 +388,9 @@ class VideoBot(object):
                     if self.DEBUG:
                         print("Could not read frame for feed ID %s"%feedid)
                     t = time.time()
-                    if t - lastcaptured > 5: # If the frames can't be read for more than 5 seconds, reopen the stream
+                    if t - lastcaptured > 60: # If the frames can't be read for more than 60 seconds, reopen the stream
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', crf=18, loglevel='quiet').run_async(pipe_stdout=True)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='h264', r=fps, crf=18, loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:

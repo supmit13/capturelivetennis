@@ -262,19 +262,12 @@ class VideoBot(object):
         return(self.pageResponse.read())
 
 
-    def verifystream(self, videolink):
-        cap = cv2.VideoCapture(videolink)
-        if not cap.isOpened():
-            return False
-        cap.release()
-        return True
-
-
     def captureaudiostream(self, streamurl, tempaudiofile, qctr):
         try:
             info = ffmpeg.probe(streamurl, select_streams='a')
         except:
             sys.stderr.buffer.write(sys.exc_info()[1].__str__().encode('utf-8'))
+            print("Could not probe audio for stream '%s' - Error: %s"%(streamurl, sys.exc_info()[1].__str__()))
             sys.exit() # End the thread.
         streams = info.get('streams', [])
         if len(streams) == 0:
@@ -355,7 +348,12 @@ class VideoBot(object):
                     continue
                 else:
                     break
-        fps = float(stream['r_frame_rate'])
+        fpsparts = str(stream['r_frame_rate']).split("/")
+        fps = 25.0 # Default frame rate
+        if fpsparts.__len__() == 2:
+            fps = float(fpsparts[0])/float(fpsparts[1])
+        else:
+            fps = float(fpsparts[0])
         ######### Additions end here ################
         process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='h264', crf=18, r=fps,  loglevel='quiet').run_async(pipe_stdout=True)
         # Get audio stream...
@@ -423,7 +421,7 @@ class VideoBot(object):
             os.makedirs(fpath+os.path.sep+"final")
         combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
         print("Normal recording\nMuxing")
-        muxcmd = "ffmpeg -y -ac 1 -channel_layout mono -itsoffset 1.5 -crf 18 -i %s -i %s -pix_fmt yuv420p %s"%(tempaudiofile, outfilename, combinedfile)
+        muxcmd = "ffmpeg -y -ac 1 -channel_layout mono -itsoffset 1.5 -i %s -i %s -pix_fmt yuv420p -vf mpdecimate,setpts=N/FRAME_RATE/TB,setdar=16/9 -preset slow %s"%(tempaudiofile, outfilename, combinedfile)
         subprocess.call(muxcmd, shell=True)
         return None
 

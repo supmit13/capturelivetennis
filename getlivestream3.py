@@ -298,7 +298,7 @@ class VideoBot(object):
                     t = time.time()
                     if t - lastcaptured > 60: # If the frames can't be read for more than 60 seconds...
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', async=1,  loglevel='quiet').run_async(pipe_stdout=True)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264',  loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:
@@ -322,7 +322,7 @@ class VideoBot(object):
         combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
         # Process the video for enhancing resolution: Set destination aspect ratio (dar) as 16/9,
         # preset is set to "slow" (for better compression), const. rate factor (crf) to 18 (for good visual quality).
-        cmd = "ffmpeg -y -i %s -pix_fmt yuv420p -vcodec libx264 -vf scale=1280:720,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
+        cmd = "ffmpeg -y -i %s -pix_fmt yuv420p -vcodec libx264 -vf mpdecimate,setpts=N/FRAME_RATE/TB,scale=1280:720,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
         #cmd = "ffmpeg -i %s -vf scale=1920:1080,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
         try:
             subprocess.call(cmd, shell=True)

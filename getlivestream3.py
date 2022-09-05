@@ -272,7 +272,7 @@ class VideoBot(object):
 
     def capturelivestream(self, argslist):
         streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
-        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', async=1,  loglevel='quiet').run_async(pipe_stdout=True)
+        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
         fpath = os.path.dirname(outfilename)
         fnamefext = os.path.basename(outfilename)
         fname = fnamefext.split(".")[0]
@@ -288,6 +288,7 @@ class VideoBot(object):
                     try:
                         frame = (np.frombuffer(inbytes, np.uint8).reshape([320, 180, 1]))
                     except:
+                        print("Failed to reshape frame: %s"%sys.exc_info()[1].__str__())
                         continue # This could be an issue if there is a continuous supply of frames that cannot be reshaped
                     self.processq.put([outnum, frame])
                     lastcaptured = time.time()
@@ -298,7 +299,7 @@ class VideoBot(object):
                     t = time.time()
                     if t - lastcaptured > 60: # If the frames can't be read for more than 60 seconds...
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264',  loglevel='quiet').run_async(pipe_stdout=True)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:
@@ -322,7 +323,7 @@ class VideoBot(object):
         combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
         # Process the video for enhancing resolution: Set destination aspect ratio (dar) as 16/9,
         # preset is set to "slow" (for better compression), const. rate factor (crf) to 18 (for good visual quality).
-        cmd = "ffmpeg -y -i %s -pix_fmt yuv420p -vcodec libx264 -vf mpdecimate,setpts=N/FRAME_RATE/TB,scale=1280:720,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
+        cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf mpdecimate,scale=1280:720,setdar=16/9 -vsync vfr -preset slow -crf 18 -copyts %s"%(outfilename, combinedfile)
         #cmd = "ffmpeg -i %s -vf scale=1920:1080,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
         try:
             subprocess.call(cmd, shell=True)
@@ -359,7 +360,7 @@ class VideoBot(object):
                     isempty = True
                 elif self.processq.empty() and isempty: # processq queue is empty now and was empty last time
                     print("processq is empty")
-                    time.sleep(10) # Sleep for 10 secs.
+                    time.sleep(5) # Sleep for 5 secs.
                     endofrun = True
                 elif endofrun and isempty:
                     print("Could not find any frames to process. Quitting")
@@ -617,6 +618,7 @@ https://github.com/Mukosame/Zooming-Slow-Mo-CVPR-2020
 https://pyimagesearch.com/2020/11/09/opencv-super-resolution-with-deep-learning/
 https://learnopencv.com/super-resolution-in-opencv/
 https://github.com/Saafke/FSRCNN_Tensorflow/blob/master/models/FSRCNN_x3.pb
+https://stackoverflow.com/questions/42262888/what-ffmpeg-settings-to-ensure-0-duplicate-frames-and-0-dropped-frames-when-capt
 """
 # Dev: Supriyo Mitra
 # Date: 28-07-2022

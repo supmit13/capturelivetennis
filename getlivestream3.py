@@ -425,6 +425,7 @@ class VideoBot(object):
         beginspacePattern = re.compile("^\s+")
         endspacePattern = re.compile("\s+$")
         eventtitle, team1, team2, eventtype, startdate, enddate, eventstatus, deleted = "", "", "", "", "", "", "live", 0
+        womenpattern = re.compile("women", re.IGNORECASE|re.DOTALL)
         subtitlespan = soup.find("span", {'class' : 'sub_title'})
         if subtitlespan is not None:
             eventtype = subtitlespan.renderContents().decode('utf-8')
@@ -432,7 +433,11 @@ class VideoBot(object):
             eventtype = htmltagPattern.sub("", eventtype)
             eventtype = beginspacePattern.sub("", eventtype)
             eventtype = endspacePattern.sub("", eventtype)
+            #if not re.search(womenpattern, eventtype): # We cover women's matches only
+            #    return None
         h1tags = soup.find_all("h1")
+        w25pattern = re.compile("w25", re.IGNORECASE|re.DOTALL)
+        doublespattern = re.compile("doubles", re.IGNORECASE|re.DOTALL)
         if h1tags.__len__() > 0:
             eventtitle = h1tags[0].renderContents().decode('utf-8')
             eventtitle = eventtitle.replace("\n", "").replace("\r", "")
@@ -440,6 +445,10 @@ class VideoBot(object):
             eventtitle = eventtitle.replace("LIVESTREAM:", "")
             eventtitle = beginspacePattern.sub("", eventtitle)
             eventtitle = endspacePattern.sub("", eventtitle)
+            if re.search(w25pattern, eventtitle): # We don't cover w25 matches.
+                return None
+            if re.search(doublespattern, eventtitle): # We are interested in singles matches only.
+                return None
         datetimediv = soup.find("div", {'class' : 'video_date'})
         if datetimediv is not None:
             datetimecontents = datetimediv.renderContents().decode('utf-8')
@@ -545,6 +554,10 @@ if __name__ == "__main__":
                 streamurl = itftennis.getstreamurlfrompage(streampageurl)
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
+                    # Now, get feed metadata...
+                    metadata = itftennis.getfeedmetadata(streampageurl)
+                    if metadata is None:
+                        continue
                     outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
                     fpath = os.path.dirname(outfilename)
                     fnamefext = os.path.basename(outfilename)
@@ -553,8 +566,6 @@ if __name__ == "__main__":
                     out = open(outfilename, "wb")
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
-                    # Now, get feed metadata...
-                    metadata = itftennis.getfeedmetadata(streampageurl)
                     # Save metadata in DB
                     feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('%s', '%s', '%s', '%s', null, '%s', 'live', '%s', FALSE, '%s', 1)"%(metadata['FeedTitle'], metadata['FeedEventTeam1'], metadata['FeedEventTeam2'], metadata['FeedStartTime'], metadata['FeedEventType'], combinedfile, datetime.datetime.now()) # The supplied user Id value of 1 is reserved for this script.
                     try:

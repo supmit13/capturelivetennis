@@ -341,7 +341,12 @@ class VideoBot(object):
         endofrun = False
         while True:
             frame = None
-            args = self.processq.get()
+            try:
+                args = self.processq.get()
+            except: # Sometimes, the program crashes at this point due to lack of memory...
+                print("Error: %s"%sys.exc_info()[1].__str__())
+                time.sleep(2) # ...sleep for a couple of seconds and get going.
+                continue
             outnum = args[0]
             frame = args[1]
             if outlist.__len__() > outnum:
@@ -433,8 +438,8 @@ class VideoBot(object):
             eventtype = htmltagPattern.sub("", eventtype)
             eventtype = beginspacePattern.sub("", eventtype)
             eventtype = endspacePattern.sub("", eventtype)
-            #if not re.search(womenpattern, eventtype): # We cover women's matches only
-            #    return None
+            if not re.search(womenpattern, eventtype): # We cover women's matches only
+                return None
         h1tags = soup.find_all("h1")
         w25pattern = re.compile("w25", re.IGNORECASE|re.DOTALL)
         doublespattern = re.compile("doubles", re.IGNORECASE|re.DOTALL)

@@ -545,12 +545,13 @@ if __name__ == "__main__":
             argslist = []
             newurlscount = 0
             for streampageurl in streampageurls:
+                newstream = False
                 sps = re.search(streampattern, streampageurl)
                 if sps:
                     streamnum = sps.groups()[0]
                     if streamnum not in vidsdict.keys(): # Check if this stream has already been processed.
                         vidsdict[streamnum] = 1
-                        newurlscount += 1
+                        newstream = True
                     else:
                         continue
                 else:
@@ -563,6 +564,8 @@ if __name__ == "__main__":
                     metadata = itftennis.getfeedmetadata(streampageurl)
                     if metadata is None:
                         continue
+                    if newstream is True:
+                        newurlscount += 1
                     outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
                     fpath = os.path.dirname(outfilename)
                     fnamefext = os.path.basename(outfilename)

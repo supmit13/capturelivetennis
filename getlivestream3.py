@@ -345,8 +345,7 @@ class VideoBot(object):
             try:
                 args = self.processq.get()
             except: # Sometimes, the program crashes at this point due to lack of memory...
-                print("Error: %s"%sys.exc_info()[1].__str__())
-                time.sleep(2) # ...sleep for a couple of seconds and get going.
+                print("Error in framewriter while reading from queue: %s"%sys.exc_info()[1].__str__())
                 continue
             outnum = args[0]
             frame = args[1]
@@ -366,7 +365,7 @@ class VideoBot(object):
                     isempty = True
                 elif self.processq.empty() and isempty: # processq queue is empty now and was empty last time
                     print("processq is empty")
-                    time.sleep(5) # Sleep for 5 secs.
+                    time.sleep(2) # Sleep for 2 secs.
                     endofrun = True
                 elif endofrun and isempty:
                     print("Could not find any frames to process. Quitting")
@@ -593,11 +592,14 @@ if __name__ == "__main__":
                     print("Couldn't get the stream url from page")
             if newurlscount > 0:
                 for args in argslist:
-                    p = Process(target=itftennis.capturelivestream, args=(args,))
-                    p.start()
-                    processeslist.append(p)
-                    if itftennis.DEBUG:
-                        print("Started process with args %s"%args)
+                    try:
+                        p = Process(target=itftennis.capturelivestream, args=(args,))
+                        p.start()
+                        processeslist.append(p)
+                        if itftennis.DEBUG:
+                            print("Started process with args %s"%args)
+                    except:
+                        print("Could not start process due to error: %s"%sys.exc_info()[1].__str__())
                 print("Created processes, continuing now...")
                 continue
         time.sleep(itftennis.livestreamcheckinterval)

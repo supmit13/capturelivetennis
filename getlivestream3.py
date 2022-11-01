@@ -365,7 +365,7 @@ class VideoBot(object):
                     isempty = True
                 elif self.processq.empty() and isempty: # processq queue is empty now and was empty last time
                     print("processq is empty")
-                    time.sleep(2) # Sleep for 2 secs.
+                    time.sleep(1) # Sleep for a sec.
                     endofrun = True
                 elif endofrun and isempty:
                     print("Could not find any frames to process. Quitting")

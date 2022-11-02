@@ -34,6 +34,7 @@ import MySQLdb
 
 # Basic utility functions and variables
 partialUrlPattern = re.compile("^/\w+")
+processeslist = []
 
 def decodeHtmlEntities(content):
     entitiesDict = {'&nbsp;' : ' ', '&quot;' : '"', '&lt;' : '<', '&gt;' : '>', '&amp;' : '&', '&apos;' : "'", '&#160;' : ' ', '&#60;' : '<', '&#62;' : '>', '&#38;' : '&', '&#34;' : '"', '&#39;' : "'"}
@@ -333,8 +334,6 @@ class VideoBot(object):
         if not os.path.exists(combinedfile):
             shutil.copy(outfilename, combinedfile)
             #os.unlink(outfilename) # Remove the file as we have it copied to "final" dir.
-        # Exit this process. Otherwise we will have a lot of processes in sleep mode.
-        sys.exit()
         return None
 
     
@@ -519,6 +518,13 @@ class VideoBot(object):
         return metadata
 
 
+def handleprocesstermination():
+    global processeslist
+    while True:
+        for p in processeslist:
+            p.join()
+
+
 if __name__ == "__main__":
     if sys.argv.__len__() < 2:
         print("Insufficient parameters")
@@ -530,13 +536,15 @@ if __name__ == "__main__":
     t = Thread(target=itftennis.framewriter, args=(outlist,))
     t.daemon = True
     t.start()
+    tp = Thread(target=handleprocesstermination, args=())
+    tp.daemon = True
+    tp.start()
     # Create a database connection and as associated cursor object. We will handle database operations from main thread only.
     dbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
     cursor = dbconn.cursor()
     feedidlist = []
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
-    processeslist = []
     while True:
         streampageurls = itftennis.checkforlivestream()
         if itftennis.DEBUG:
@@ -608,6 +616,7 @@ if __name__ == "__main__":
                 continue
         time.sleep(itftennis.livestreamcheckinterval)
     t.join()
+    tp.join()
     for out in outlist:
         out.close()
     dbconn.close() # Close and keep environment clean.

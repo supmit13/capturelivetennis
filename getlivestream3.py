@@ -333,8 +333,9 @@ class VideoBot(object):
         if not os.path.exists(combinedfile):
             shutil.copy(outfilename, combinedfile)
             #os.unlink(outfilename) # Remove the file as we have it copied to "final" dir.
+        # Exit this process. Otherwise we will have a lot of processes in sleep mode.
+        sys.exit()
         return None
-
 
     
     def framewriter(self, outlist):

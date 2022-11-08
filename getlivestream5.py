@@ -153,7 +153,7 @@ class VideoBot(object):
         self.chunk_size = 1024
         self.time_limit = 86400 # time in seconds (1 day), for recording. Event will end before this, and we need to be able to recognize it.
         mgr = mp.Manager()
-        self.processq = mgr.Queue(maxsize=1000000)
+        self.processq = mgr.Queue(maxsize=100000000)
         self.statusq = []
         for i in range(10000):
             self.statusq.append(1) # Default status is active

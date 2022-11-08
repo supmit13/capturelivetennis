@@ -307,7 +307,7 @@ class VideoBot(object):
         fnamefext = os.path.basename(outfilename)
         fname = fnamefext.split(".")[0]
         #read_size = 1280 * 720 * 1 # This is width * height * 1
-        read_size = 320 * 180 * 1 # This is width * height * 1
+        read_size = 320 * 180 * 3 # This is width * height * 3
         lastcaptured = time.time()
         maxtries = 12
         ntries = 0
@@ -316,7 +316,7 @@ class VideoBot(object):
                 inbytes = process.stdout.read(read_size)
                 if inbytes is not None and inbytes.__len__() > 0:
                     try:
-                        frame = (np.frombuffer(inbytes, np.uint8).reshape([320, 180, 1]))
+                        frame = (np.frombuffer(inbytes, np.uint8).reshape([180, 320, 3]))
                     except:
                         print("Failed to reshape frame: %s"%sys.exc_info()[1].__str__())
                         continue # This could be an issue if there is a continuous supply of frames that cannot be reshaped
@@ -327,7 +327,7 @@ class VideoBot(object):
                     if self.DEBUG:
                         print("Could not read frame for feed ID %s"%feedid)
                     t = time.time()
-                    if t - lastcaptured > 60: # If the frames can't be read for more than 60 seconds...
+                    if t - lastcaptured > 30: # If the frames can't be read for more than 30 seconds...
                         print("Reopening feed identified by feed ID %s"%feedid)
                         process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', acodec='pcm_s16le', ac=channels, ar=samplerate, vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1

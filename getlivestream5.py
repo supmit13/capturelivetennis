@@ -277,7 +277,32 @@ class VideoBot(object):
 
     def capturelivestream(self, argslist):
         streamurl, outnum, feedid, outfilename = argslist[0], argslist[1], argslist[2], argslist[3]
-        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
+        try:
+            info = ffmpeg.probe(streamurl, select_streams='a')
+            streams = info.get('streams', [])
+        except:
+            sys.stderr.buffer.write(sys.exc_info()[1].__str__().encode('utf-8'))
+            print("Could not probe audio for stream '%s' - Error: %s"%(streamurl, sys.exc_info()[1].__str__()))
+            #sys.exit() # End the thread.
+            streams = []
+        if len(streams) == 0:
+            print('There are no streams available')
+            stream = {}
+        else:
+            stream = streams[0]
+            if stream.get('codec_type') != 'audio':
+                for stream in streams:
+                    if stream.get('codec_type') != 'audio':
+                        continue
+                    else:
+                        break
+        if 'channels' in stream.keys():
+            channels = stream['channels']
+            samplerate = float(stream['sample_rate'])
+        else:
+            channels = None
+            samplerate = 44100
+        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', acodec='pcm_s16le', ac=channels, ar=samplerate, vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
         fpath = os.path.dirname(outfilename)
         fnamefext = os.path.basename(outfilename)
         fname = fnamefext.split(".")[0]
@@ -304,7 +329,7 @@ class VideoBot(object):
                     t = time.time()
                     if t - lastcaptured > 60: # If the frames can't be read for more than 60 seconds...
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', acodec='pcm_s16le', ac=channels, ar=samplerate, vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:

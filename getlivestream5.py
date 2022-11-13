@@ -176,6 +176,8 @@ class VideoBot(object):
         self.dbport = 3306
         #self.dbport = 5432 # for postgresql
         
+        
+        
 
     def checkforlivestream(self):
         self.pageRequest = urllib.request.Request(self.siteUrl, headers=self.httpHeaders)
@@ -345,6 +347,17 @@ class VideoBot(object):
                             pdbconn.commit()
                         except:
                             print("Could not update db for the feed identified by Id %s"%feedid)
+                        feedcountsql = "select count from feedcount where id=1"
+                        try:
+                            pcursor.execute(feedcountsql)
+                            ctrrecs = pcursor.fetchall()
+                            matchescounter = ctrrecs[0][0]
+                            matchescounter -= 1
+                            feedcountdecrementsql = "update feedcount set count=%s where id=1"%matchescounter
+                            pcursor.execute(feedcountdecrementsql)
+                            pdbconn.commit()
+                        except:
+                            print("Could not decrease feedcount in feedcount table")
                         pdbconn.close()
                         break # Break out of infinite loop.
                     continue
@@ -355,7 +368,6 @@ class VideoBot(object):
         # preset is set to "slow" (for better compression), const. rate factor (crf) to 18 (for good visual quality).
         #cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf mpdecimate,scale=1280:720,setdar=16/9 -vsync vfr -preset slow -crf 18 -copyts %s"%(outfilename, combinedfile)
         cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf scale=1280:720,setdar=16/9 -vsync vfr -preset slow -crf 18 -copyts %s"%(outfilename, combinedfile)
-        #cmd = "ffmpeg -i %s -vf scale=1920:1080,setdar=16/9 -preset slow -crf 18 %s"%(outfilename, combinedfile)
         try:
             subprocess.call(cmd, shell=True)
         except:
@@ -363,7 +375,6 @@ class VideoBot(object):
         if not os.path.exists(combinedfile):
             shutil.copy(outfilename, combinedfile)
             #os.unlink(outfilename) # Remove the file as we have it copied to "final" dir.
-        self.__class__.matchescounter = self.__class__.matchescounter - 1
         return None
 
     
@@ -387,7 +398,6 @@ class VideoBot(object):
                 continue
             if frame is not None and out is not None:
                 out.write(frame)
-                #print("Wrote a frame to %s..."%outnum)
                 isempty = False
                 endofrun = False
             else:
@@ -395,7 +405,6 @@ class VideoBot(object):
                     isempty = True
                 elif self.processq.empty() and isempty: # processq queue is empty now and was empty last time
                     print("processq is empty")
-                    time.sleep(1) # Sleep for a sec.
                     endofrun = True
                 elif endofrun and isempty:
                     print("Could not find any frames to process. Quitting")
@@ -572,6 +581,10 @@ if __name__ == "__main__":
     # Create a database connection and as associated cursor object. We will handle database operations from main thread only.
     dbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
     cursor = dbconn.cursor()
+    matchescounter = 0
+    matchescountsql = "update feedcount set count = 0 where id=1"
+    cursor.execute(matchescountsql)
+    dbconn.commit()
     feedidlist = []
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
@@ -603,7 +616,14 @@ if __name__ == "__main__":
                     metadata = itftennis.getfeedmetadata(streampageurl)
                     if metadata is None:
                         continue
-                    if itftennis.__class__.matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:
+                    feedcountsql = "select count from feedcount where id=1"
+                    try:
+                        cursor.execute(feedcountsql)
+                        ctrrecs = cursor.fetchall()
+                        matchescounter = ctrrecs[0][0]
+                    except:
+                        matchescounter = 1
+                    if matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:
                         break
                     if newstream is True:
                         newurlscount += 1
@@ -640,7 +660,17 @@ if __name__ == "__main__":
                         p = Process(target=itftennis.capturelivestream, args=(args,))
                         p.start()
                         processeslist.append(p)
-                        itftennis.__class__.matchescounter += 1
+                        feedcountsql = "select count from feedcount where id=1"
+                        try:
+                            cursor.execute(feedcountsql)
+                            ctrrecs = cursor.fetchall()
+                            matchescounter = ctrrecs[0][0]
+                            matchescounter += 1
+                            feedcountincrementsql = "update feedcount set count=%s where id=1"%matchescounter
+                            cursor.execute(feedcountincrementsql)
+                            dbconn.commit()
+                        except:
+                            matchescounter = 1
                         if itftennis.DEBUG:
                             print("Started process with args %s"%args)
                     except:

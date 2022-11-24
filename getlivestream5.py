@@ -304,7 +304,8 @@ class VideoBot(object):
         else:
             channels = None
             samplerate = 44100
-        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', acodec='pcm_s16le', ac=channels, ar=samplerate, vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
+        #process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', acodec='pcm_s16le', ac=channels, ar=samplerate, vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
+        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='copy', acodec='copy', loglevel='quiet').run_async(pipe_stdout=True)
         fpath = os.path.dirname(outfilename)
         fnamefext = os.path.basename(outfilename)
         fname = fnamefext.split(".")[0]
@@ -331,7 +332,8 @@ class VideoBot(object):
                     t = time.time()
                     if t - lastcaptured > 30: # If the frames can't be read for more than 30 seconds...
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', acodec='pcm_s16le', ac=channels, ar=samplerate, vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
+                        #process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', acodec='pcm_s16le', ac=channels, ar=samplerate, vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
+                        process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='copy', acodec='copy', loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:
@@ -651,7 +653,7 @@ if __name__ == "__main__":
                         feedid = int(feedrecs[0][0])
                     except:
                         pass # Leave it if we can't get it. We can get it from the management interface.
-                    argslist.append([streamurl, outnum, feedid, outfilename])   
+                    argslist.append([streamurl, outnum, feedid, outfilename])
                 else:
                     print("Couldn't get the stream url from page")
             if newurlscount > 0:

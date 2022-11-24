@@ -12,7 +12,7 @@ source ./videoenv/bin/activate
 pypath=`which python`
 
 # Path to getlivestream.py
-getlspath="$curdir/getlivestream.py"
+getlspath="$curdir/getlivestream3.py"
 
 # execute getlivestream.py
 `nohup $pypath $getlspath "https://live.itftennis.com/en/live-streams/" >getlivestream.out 2>&1`

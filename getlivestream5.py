@@ -370,14 +370,15 @@ class VideoBot(object):
         # preset is set to "slow" (for better compression), const. rate factor (crf) to 18 (for good visual quality).
         #cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf mpdecimate,scale=1280:720,setdar=16/9 -vsync vfr -preset slow -crf 18 -copyts %s"%(outfilename, combinedfile)
         cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf scale=1280:720,setdar=16/9 -vsync vfr -preset slow -crf 18 -copyts %s"%(outfilename, combinedfile)
+        cmdretval = -1
         try:
-            subprocess.call(cmd, shell=True)
+            cmdretval = subprocess.call(cmd, shell=True) # successful completion should set cmdretval to 0
         except:
             pass
         if not os.path.exists(combinedfile):
             shutil.copy(outfilename, combinedfile)
             #os.unlink(outfilename) # Remove the file as we have it copied to "final" dir.
-        return None
+        return cmdretval
 
     
     def framewriter(self, outlist):
@@ -671,8 +672,10 @@ if __name__ == "__main__":
                             feedcountincrementsql = "update feedcount set count=%s where id=1"%matchescounter
                             cursor.execute(feedcountincrementsql)
                             dbconn.commit()
+                            print(feedcountincrementsql)
                         except:
                             matchescounter = 1
+                            print("Failed to update feedcount table")
                         if itftennis.DEBUG:
                             print("Started process with args %s"%args)
                     except:

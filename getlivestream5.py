@@ -304,7 +304,6 @@ class VideoBot(object):
         else:
             channels = None
             samplerate = 44100
-        #process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', acodec='pcm_s16le', ac=channels, ar=samplerate, vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
         process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='copy', acodec='copy', loglevel='quiet').run_async(pipe_stdout=True)
         fpath = os.path.dirname(outfilename)
         fnamefext = os.path.basename(outfilename)
@@ -332,7 +331,6 @@ class VideoBot(object):
                     t = time.time()
                     if t - lastcaptured > 30: # If the frames can't be read for more than 30 seconds...
                         print("Reopening feed identified by feed ID %s"%feedid)
-                        #process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', acodec='pcm_s16le', ac=channels, ar=samplerate, vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
                         process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='copy', acodec='copy', loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
@@ -372,7 +370,7 @@ class VideoBot(object):
         cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf scale=1280:720,setdar=16/9 -vsync vfr -preset slow -crf 18 -copyts %s"%(outfilename, combinedfile)
         cmdretval = -1
         try:
-            cmdretval = subprocess.call(cmd, shell=True) # successful completion should set cmdretval to 0
+            cmdretval = subprocess.call(cmd, timeout=21600, shell=True) # successful completion should set cmdretval to 0. Timeout after 6 hours from start.
         except:
             pass
         if not os.path.exists(combinedfile):
@@ -670,12 +668,12 @@ if __name__ == "__main__":
                             matchescounter = ctrrecs[0][0]
                             matchescounter += 1
                             feedcountincrementsql = "update feedcount set count=%s where id=1"%matchescounter
+                            #print(feedcountincrementsql)
                             cursor.execute(feedcountincrementsql)
                             dbconn.commit()
-                            print(feedcountincrementsql)
                         except:
                             matchescounter = 1
-                            print("Failed to update feedcount table")
+                            print("Failed to update feedcount table: %s"%sys.exc_info()[1].__str__())
                         if itftennis.DEBUG:
                             print("Started process with args %s"%args)
                     except:

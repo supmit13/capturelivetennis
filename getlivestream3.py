@@ -305,6 +305,7 @@ class VideoBot(object):
                     if t - lastcaptured > 60: # If the frames can't be read for more than 60 seconds...
                         print("Reopening feed identified by feed ID %s"%feedid)
                         process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
+                        #process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='libx264', acodec='pcm_s16le', ac=channels, ar=samplerate, vsync=0, loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1
                     if ntries > maxtries:
                         if self.DEBUG:

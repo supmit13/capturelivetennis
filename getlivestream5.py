@@ -353,7 +353,10 @@ class VideoBot(object):
                             ctrrecs = pcursor.fetchall()
                             matchescounter = ctrrecs[0][0]
                             matchescounter -= 1
+                            if matchescounter < 0:
+                                matchescounter = 0
                             feedcountdecrementsql = "update feedcount set count=%s where id=1"%matchescounter
+                            print(feedcountdecrementsql)
                             pcursor.execute(feedcountdecrementsql)
                             pdbconn.commit()
                         except:

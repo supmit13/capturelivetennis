@@ -351,7 +351,7 @@ class VideoBot(object):
                         try:
                             pcursor.execute(feedcountsql)
                             ctrrecs = pcursor.fetchall()
-                            matchescounter = ctrrecs[0][0]
+                            matchescounter = int(ctrrecs[0][0])
                             matchescounter -= 1
                             if matchescounter < 0:
                                 matchescounter = 0
@@ -593,6 +593,15 @@ if __name__ == "__main__":
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
     while True:
+        feedcountsql = "select count from feedcount where id=1"
+        try:
+            cursor.execute(feedcountsql)
+            ctrrecs = cursor.fetchall()
+            matchescounter = int(ctrrecs[0][0])
+        except:
+            pass
+        if matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:
+            continue
         streampageurls = itftennis.checkforlivestream()
         if itftennis.DEBUG:
             print("Checking for new urls...")
@@ -620,15 +629,10 @@ if __name__ == "__main__":
                     metadata = itftennis.getfeedmetadata(streampageurl)
                     if metadata is None:
                         continue
-                    feedcountsql = "select count from feedcount where id=1"
-                    try:
-                        cursor.execute(feedcountsql)
-                        ctrrecs = cursor.fetchall()
-                        matchescounter = ctrrecs[0][0]
-                    except:
-                        matchescounter = 1
+                    matchescounter += 1
                     if matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:
                         break
+                    #print("matchescounter is %s"%matchescounter)
                     if newstream is True:
                         newurlscount += 1
                     outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
@@ -664,12 +668,7 @@ if __name__ == "__main__":
                         p = Process(target=itftennis.capturelivestream, args=(args,))
                         p.start()
                         processeslist.append(p)
-                        feedcountsql = "select count from feedcount where id=1"
                         try:
-                            cursor.execute(feedcountsql)
-                            ctrrecs = cursor.fetchall()
-                            matchescounter = ctrrecs[0][0]
-                            matchescounter += 1
                             feedcountincrementsql = "update feedcount set count=%s where id=1"%matchescounter
                             #print(feedcountincrementsql)
                             cursor.execute(feedcountincrementsql)

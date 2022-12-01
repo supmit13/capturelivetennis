@@ -668,19 +668,19 @@ if __name__ == "__main__":
                         p = Process(target=itftennis.capturelivestream, args=(args,))
                         p.start()
                         processeslist.append(p)
-                        try:
-                            feedcountincrementsql = "update feedcount set count=%s where id=1"%matchescounter
-                            #print(feedcountincrementsql)
-                            cursor.execute(feedcountincrementsql)
-                            dbconn.commit()
-                        except:
-                            matchescounter = 1
-                            print("Failed to update feedcount table: %s"%sys.exc_info()[1].__str__())
                         if itftennis.DEBUG:
                             print("Started process with args %s"%args)
                     except:
                         print("Could not start process due to error: %s"%sys.exc_info()[1].__str__())
                 print("Created processes, continuing now...")
+                try:
+                    feedcountincrementsql = "update feedcount set count=%s where id=1"%matchescounter
+                    #print(feedcountincrementsql)
+                    cursor.execute(feedcountincrementsql)
+                    dbconn.commit()
+                except:
+                    matchescounter = 1
+                    print("Failed to update feedcount table: %s"%sys.exc_info()[1].__str__())
                 continue
         time.sleep(itftennis.livestreamcheckinterval)
     t.join()

@@ -493,6 +493,7 @@ class VideoBot(object):
             eventtitle = eventtitle.replace("LIVESTREAM:", "")
             eventtitle = beginspacePattern.sub("", eventtitle)
             eventtitle = endspacePattern.sub("", eventtitle)
+            print("Event Title: %s"%eventtitle)
             if re.search(w25pattern, eventtitle): # We don't cover w25 matches.
                 return None
             if re.search(doublespattern, eventtitle): # We are interested in singles matches only.
@@ -627,12 +628,13 @@ if __name__ == "__main__":
                 if streamurl is not None:
                     # Now, get feed metadata...
                     metadata = itftennis.getfeedmetadata(streampageurl)
+                    print("metadata is %s"%str(metadata))
                     if metadata is None:
                         continue
                     matchescounter += 1
+                    print("matchescounter is %s"%matchescounter)
                     if matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:
                         break
-                    #print("matchescounter is %s"%matchescounter)
                     if newstream is True:
                         newurlscount += 1
                     outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
@@ -665,7 +667,8 @@ if __name__ == "__main__":
             if newurlscount > 0:
                 for args in argslist:
                     try:
-                        p = Process(target=itftennis.capturelivestream, args=(args,))
+                        p = Thread(target=itftennis.capturelivestream, args=(args,)) # These are threads actually.
+                        p.daemon = True
                         p.start()
                         processeslist.append(p)
                         if itftennis.DEBUG:
@@ -675,7 +678,7 @@ if __name__ == "__main__":
                 print("Created processes, continuing now...")
                 try:
                     feedcountincrementsql = "update feedcount set count=%s where id=1"%matchescounter
-                    #print(feedcountincrementsql)
+                    print(feedcountincrementsql)
                     cursor.execute(feedcountincrementsql)
                     dbconn.commit()
                 except:

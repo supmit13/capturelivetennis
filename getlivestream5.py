@@ -97,7 +97,6 @@ class VideoBot(object):
     htmlEntitiesDict = {'&nbsp;' : ' ', '&#160;' : ' ', '&amp;' : '&', '&#38;' : '&', '&lt;' : '<', '&#60;' : '<', '&gt;' : '>', '&#62;' : '>', '&apos;' : '\'', '&#39;' : '\'', '&quot;' : '"', '&#34;' : '"'}
 
     MAX_CONCURRENT_MATCHES = 3
-    matchescounter = 0
 
     def __init__(self, siteurl):
         # Create the opener object(s). Might need more than one type if we need to get pages with unwanted redirects.
@@ -594,13 +593,18 @@ if __name__ == "__main__":
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
     while True:
+        newdbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname) 
+        # We needed to create this connection since the transaction isolation level in the DB is REPEATABLE-READ (default). This causes the select query to retrieve stale values when run with the dbconn connection.
+        newcursor = newdbconn.cursor()
         feedcountsql = "select count from feedcount where id=1"
         try:
-            cursor.execute(feedcountsql)
-            ctrrecs = cursor.fetchall()
+            ctrrecs = None
+            newcursor.execute(feedcountsql)
+            ctrrecs = newcursor.fetchall()
             matchescounter = int(ctrrecs[0][0])
         except:
             print("Error retrieving matchescounter - %s"%sys.exc_info()[1].__str__())
+        newdbconn.close()
         streampageurls = itftennis.checkforlivestream()
         sys.stdout.flush()
         if itftennis.DEBUG:

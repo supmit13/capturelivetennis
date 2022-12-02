@@ -600,8 +600,9 @@ if __name__ == "__main__":
             ctrrecs = cursor.fetchall()
             matchescounter = int(ctrrecs[0][0])
         except:
-            pass
+            print("Error retrieving matchescounter - %s"%sys.exc_info()[1].__str__())
         streampageurls = itftennis.checkforlivestream()
+        sys.stdout.flush()
         if itftennis.DEBUG:
             print("Checking for new urls...")
             print(streampageurls.__len__())

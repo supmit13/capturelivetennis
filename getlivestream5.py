@@ -131,7 +131,6 @@ class VideoBot(object):
         try:
             self.pageResponse = self.opener.open(self.pageRequest)
             headers = self.pageResponse.getheaders()
-            #print(headers)
             if "Location" in headers:
                 self.requestUrl = headers["Location"]
                 self.pageRequest = urllib.request.Request(self.requestUrl, headers=self.httpHeaders)
@@ -355,7 +354,7 @@ class VideoBot(object):
                             if matchescounter < 0:
                                 matchescounter = 0
                             feedcountdecrementsql = "update feedcount set count=%s where id=1"%matchescounter
-                            print(feedcountdecrementsql)
+                            #print(feedcountdecrementsql)
                             pcursor.execute(feedcountdecrementsql)
                             pdbconn.commit()
                         except:
@@ -593,8 +592,7 @@ if __name__ == "__main__":
     vidsdict = {}
     streampattern = re.compile("\?vid=(\d+)$")
     while True:
-        newdbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname) 
-        # We needed to create this connection since the transaction isolation level in the DB is REPEATABLE-READ (default). This causes the select query to retrieve stale values when run with the dbconn connection.
+        newdbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname) # We needed to create this connection since the transaction isolation level in the DB is REPEATABLE-READ. This causes the select query to retrieve stale values when run with the dbconn connection.
         newcursor = newdbconn.cursor()
         feedcountsql = "select count from feedcount where id=1"
         try:
@@ -631,10 +629,8 @@ if __name__ == "__main__":
                 if streamurl is not None:
                     # Now, get feed metadata...
                     metadata = itftennis.getfeedmetadata(streampageurl)
-                    #print("metadata is %s"%str(metadata))
                     if metadata is None:
                         continue
-                    #print("matchescounter is %s"%matchescounter)
                     if matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:
                         break
                     matchescounter += 1
@@ -670,7 +666,7 @@ if __name__ == "__main__":
             if newurlscount > 0:
                 for args in argslist:
                     try:
-                        p = Thread(target=itftennis.capturelivestream, args=(args,)) # These are threads actually.
+                        p = Thread(target=itftennis.capturelivestream, args=(args,))
                         p.daemon = True
                         p.start()
                         processeslist.append(p)
@@ -681,7 +677,6 @@ if __name__ == "__main__":
                 print("Created processes, continuing now...")
                 try:
                     feedcountincrementsql = "update feedcount set count=%s where id=1"%matchescounter
-                    #print(feedcountincrementsql)
                     cursor.execute(feedcountincrementsql)
                     dbconn.commit()
                 except:

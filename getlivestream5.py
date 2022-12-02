@@ -601,8 +601,6 @@ if __name__ == "__main__":
             matchescounter = int(ctrrecs[0][0])
         except:
             pass
-        if matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:
-            continue
         streampageurls = itftennis.checkforlivestream()
         if itftennis.DEBUG:
             print("Checking for new urls...")
@@ -628,13 +626,13 @@ if __name__ == "__main__":
                 if streamurl is not None:
                     # Now, get feed metadata...
                     metadata = itftennis.getfeedmetadata(streampageurl)
-                    print("metadata is %s"%str(metadata))
+                    #print("metadata is %s"%str(metadata))
                     if metadata is None:
                         continue
-                    matchescounter += 1
-                    print("matchescounter is %s"%matchescounter)
+                    #print("matchescounter is %s"%matchescounter)
                     if matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:
                         break
+                    matchescounter += 1
                     if newstream is True:
                         newurlscount += 1
                     outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
@@ -678,7 +676,7 @@ if __name__ == "__main__":
                 print("Created processes, continuing now...")
                 try:
                     feedcountincrementsql = "update feedcount set count=%s where id=1"%matchescounter
-                    print(feedcountincrementsql)
+                    #print(feedcountincrementsql)
                     cursor.execute(feedcountincrementsql)
                     dbconn.commit()
                 except:

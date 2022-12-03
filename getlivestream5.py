@@ -645,9 +645,10 @@ if __name__ == "__main__":
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
                     # Save metadata in DB
-                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('%s', '%s', '%s', '%s', null, '%s', 'live', '%s', FALSE, '%s', 1)"%(metadata['FeedTitle'], metadata['FeedEventTeam1'], metadata['FeedEventTeam2'], metadata['FeedStartTime'], metadata['FeedEventType'], combinedfile, datetime.datetime.now()) # The supplied user Id value of 1 is reserved for this script.
+                    nowtime = datetime.datetime.now()
+                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('" + str(metadata['FeedTitle']) + "', '" + str(metadata['FeedEventTeam1']) + "', '" + str(metadata['FeedEventTeam2']) + "', '" + str(metadata['FeedStartTime']) + "', null, '" + str(metadata['FeedEventType']) + "', 'live', '" + str(combinedfile) + "', FALSE, '%s', 1)"%nowtime # The supplied user Id value of 1 is reserved for this script.
                     try:
-                        cursor.execute(feedinsertsql)
+                        cursor.execute(feedinsertsql, (nowtime,))
                         dbconn.commit() # Just in case autocommit is not set.
                     except:
                         print("Error in data insertion to DB: %s\nErroneous SQL: %s"%(sys.exc_info()[1].__str__(), feedinsertsql))
@@ -676,7 +677,7 @@ if __name__ == "__main__":
                         print("Could not start process due to error: %s"%sys.exc_info()[1].__str__())
                 print("Created processes, continuing now...")
                 try:
-                    feedcountincrementsql = "update feedcount set `count`=%s where id=1"%matchescounter
+                    feedcountincrementsql = "update feedcount set count=" + str(matchescounter) + " where id=1"
                     cursor.execute(feedcountincrementsql)
                     dbconn.commit()
                 except:

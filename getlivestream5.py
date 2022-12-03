@@ -676,7 +676,7 @@ if __name__ == "__main__":
                         print("Could not start process due to error: %s"%sys.exc_info()[1].__str__())
                 print("Created processes, continuing now...")
                 try:
-                    feedcountincrementsql = "update feedcount set count=%s where id=1"%matchescounter
+                    feedcountincrementsql = "update feedcount set `count`=%s where id=1"%matchescounter
                     cursor.execute(feedcountincrementsql)
                     dbconn.commit()
                 except:

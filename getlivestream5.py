@@ -646,7 +646,7 @@ if __name__ == "__main__":
                     outnum = outlist.__len__() - 1
                     # Save metadata in DB
                     nowtime = datetime.datetime.now()
-                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('" + str(metadata['FeedTitle']) + "', '" + str(metadata['FeedEventTeam1']) + "', '" + str(metadata['FeedEventTeam2']) + "', '" + str(metadata['FeedStartTime']) + "', null, '" + str(metadata['FeedEventType']) + "', 'live', '" + str(combinedfile) + "', FALSE, '%s', 1)"%nowtime # The supplied user Id value of 1 is reserved for this script.
+                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('" + str(metadata['FeedTitle']) + "', '" + str(metadata['FeedEventTeam1']) + "', '" + str(metadata['FeedEventTeam2']) + "', '" + str(metadata['FeedStartTime']) + "', null, '" + str(metadata['FeedEventType']) + "', 'live', '" + str(combinedfile) + "', FALSE, %s, 1)" # The supplied user Id value of 1 is reserved for this script.
                     try:
                         cursor.execute(feedinsertsql, (nowtime,))
                         dbconn.commit() # Just in case autocommit is not set.
@@ -677,8 +677,8 @@ if __name__ == "__main__":
                         print("Could not start process due to error: %s"%sys.exc_info()[1].__str__())
                 print("Created processes, continuing now...")
                 try:
-                    feedcountincrementsql = "update feedcount set count=" + str(matchescounter) + " where id=1"
-                    cursor.execute(feedcountincrementsql)
+                    feedcountincrementsql = "update feedcount set count=%s where id=1"
+                    cursor.execute(feedcountincrementsql, (matchescounter,))
                     dbconn.commit()
                 except:
                     matchescounter = 1

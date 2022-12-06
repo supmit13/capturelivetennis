@@ -354,7 +354,6 @@ class VideoBot(object):
                             if matchescounter < 0:
                                 matchescounter = 0
                             feedcountdecrementsql = "update feedcount set count=%s where id=1"%matchescounter
-                            #print(feedcountdecrementsql)
                             pcursor.execute(feedcountdecrementsql)
                             pdbconn.commit()
                         except:
@@ -645,10 +644,12 @@ if __name__ == "__main__":
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
                     # Save metadata in DB
+                    dbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
+                    cursor = dbconn.cursor()
                     nowtime = datetime.datetime.now()
-                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('" + str(metadata['FeedTitle']) + "', '" + str(metadata['FeedEventTeam1']) + "', '" + str(metadata['FeedEventTeam2']) + "', '" + str(metadata['FeedStartTime']) + "', null, '" + str(metadata['FeedEventType']) + "', 'live', '" + str(combinedfile) + "', FALSE, %s, 1)" # The supplied user Id value of 1 is reserved for this script.
+                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('" + str(metadata['FeedTitle']) + "', '" + str(metadata['FeedEventTeam1']) + "', '" + str(metadata['FeedEventTeam2']) + "', '" + str(metadata['FeedStartTime']) + "', null, '" + str(metadata['FeedEventType']) + "', 'live', '" + str(combinedfile) + "', FALSE, '%s', 1)"%(nowtime) # The supplied user Id value of 1 is reserved for this script.
                     try:
-                        cursor.execute(feedinsertsql, (nowtime,))
+                        cursor.execute(feedinsertsql)
                         dbconn.commit() # Just in case autocommit is not set.
                     except:
                         print("Error in data insertion to DB: %s\nErroneous SQL: %s"%(sys.exc_info()[1].__str__(), feedinsertsql))
@@ -661,6 +662,8 @@ if __name__ == "__main__":
                         feedid = int(feedrecs[0][0])
                     except:
                         pass # Leave it if we can't get it. We can get it from the management interface.
+                    cursor.close()
+                    dbconn.close()
                     argslist.append([streamurl, outnum, feedid, outfilename])
                 else:
                     print("Couldn't get the stream url from page")
@@ -676,13 +679,17 @@ if __name__ == "__main__":
                     except:
                         print("Could not start process due to error: %s"%sys.exc_info()[1].__str__())
                 print("Created processes, continuing now...")
+                dbconn = MySQLdb.connect(host=itftennis.dbhost, port=itftennis.dbport, user=itftennis.dbuser, passwd=itftennis.dbpasswd, db=itftennis.dbname)
+                cursor = dbconn.cursor()
                 try:
-                    feedcountincrementsql = "update feedcount set count=%s where id=1"
-                    cursor.execute(feedcountincrementsql, (matchescounter,))
+                    feedcountincrementsql = "update feedcount set count=%s where id=1"%(matchescounter)
+                    cursor.execute(feedcountincrementsql)
                     dbconn.commit()
                 except:
                     matchescounter = 1
                     print("Failed to update feedcount table: %s"%sys.exc_info()[1].__str__())
+                cursor.close()
+                dbconn.close()
                 continue
         time.sleep(itftennis.livestreamcheckinterval)
     t.join()

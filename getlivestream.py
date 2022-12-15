@@ -785,13 +785,17 @@ if __name__ == "__main__":
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
                     outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
+                    fpath = os.path.dirname(outfilename)
+                    fnamefext = os.path.basename(outfilename)
+                    fname = fnamefext.split(".")[0]
+                    combinedfile = fpath + os.path.sep + "final" + os.path.sep + fname + "_combined.avi"
                     out = cv2.VideoWriter(outfilename, itftennis.fourcc, 1/itftennis.FPS, itftennis.size)
                     outlist.append(out) # Save it in the list and take down the number for usage in framewriter
                     outnum = outlist.__len__() - 1
                     # Now, get feed metadata...
                     metadata = itftennis.getfeedmetadata(streampageurl)
                     # Save metadata in DB
-                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('%s', '%s', '%s', '%s', null, '%s', 'live', '%s', FALSE, '%s', 1)"%(metadata['FeedTitle'], metadata['FeedEventTeam1'], metadata['FeedEventTeam2'], metadata['FeedStartTime'], metadata['FeedEventType'], outfilename, datetime.datetime.now()) # The supplied user Id value of 1 is reserved for this script.
+                    feedinsertsql = "insert into feedman_feeds (feedtitle, feedeventteam1, feedeventteam2, feedstart, feedend, eventtype, feedstatus, feedpath, deleted, updatetime, updateuser_id) values ('%s', '%s', '%s', '%s', null, '%s', 'live', '%s', FALSE, '%s', 1)"%(metadata['FeedTitle'], metadata['FeedEventTeam1'], metadata['FeedEventTeam2'], metadata['FeedStartTime'], metadata['FeedEventType'], combinedfile, datetime.datetime.now()) # The supplied user Id value of 1 is reserved for this script.
                     try:
                         cursor.execute(feedinsertsql)
                         dbconn.commit() # Just in case autocommit is not set.

@@ -367,7 +367,7 @@ class VideoBot(object):
         # Process the video for enhancing resolution: Set destination aspect ratio (dar) as 16/9,
         # preset is set to "slow" (for better compression), const. rate factor (crf) to 18 (for good visual quality).
         #cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf mpdecimate,scale=1280:720,setdar=16/9 -vsync vfr -preset slow -crf 18 -copyts %s"%(outfilename, combinedfile)
-        cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf scale=1280:720,setdar=16/9 -vsync vfr -preset slow -crf 18 -copyts %s"%(outfilename, combinedfile)
+        cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf scale=1280:720,setdar=16/9 -vsync vfr -speed 4 -crf 18 -copyts %s"%(outfilename, combinedfile)
         cmdretval = -1
         try:
             cmdretval = subprocess.call(cmd, timeout=21600, shell=True) # successful completion should set cmdretval to 0. Timeout after 6 hours from start.
@@ -481,7 +481,7 @@ class VideoBot(object):
             if not re.search(womenpattern, eventtype): # We cover women's matches only
                 return None
         h1tags = soup.find_all("h1")
-        w25pattern = re.compile("w25", re.IGNORECASE|re.DOTALL)
+        w15pattern = re.compile("w15", re.IGNORECASE|re.DOTALL)
         doublespattern = re.compile("doubles", re.IGNORECASE|re.DOTALL)
         if h1tags.__len__() > 0:
             eventtitle = h1tags[0].renderContents().decode('utf-8')
@@ -491,7 +491,7 @@ class VideoBot(object):
             eventtitle = beginspacePattern.sub("", eventtitle)
             eventtitle = endspacePattern.sub("", eventtitle)
             print("Event Title: %s"%eventtitle)
-            if re.search(w25pattern, eventtitle): # We don't cover w25 matches.
+            if re.search(w15pattern, eventtitle): # We don't cover w15 matches.
                 return None
             if re.search(doublespattern, eventtitle): # We are interested in singles matches only.
                 return None
@@ -630,12 +630,17 @@ if __name__ == "__main__":
                     metadata = itftennis.getfeedmetadata(streampageurl)
                     if metadata is None:
                         continue
-                    if matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:
-                        break
+                    #if matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:
+                    #    break
                     matchescounter += 1
                     if newstream is True:
                         newurlscount += 1
-                    outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+".avi" # Please change this as per your system.
+                    tm1 = str(metadata['FeedEventTeam1'])
+                    tm2 = str(metadata['FeedEventTeam2'])
+                    tm1 = tm1.replace(" ", "_").replace("-", "_").replace("'", "_").replace('"', "_").replace(";", "_").replace(",", "_").replace("&", "_").replace("&", "_")
+                    tm2 = tm2.replace(" ", "_").replace("-", "_").replace("'", "_").replace('"', "_").replace(";", "_").replace(",", "_").replace("&", "_").replace("&", "_")
+                    tm1vstm2 = tm1 + "_vs_" + tm2
+                    outfilename = time.strftime("./tennisvideos/" + "%Y%m%d%H%M%S",time.localtime())+ "_%s"%tm1vstm2 + ".avi" # Please change this as per your system.
                     fpath = os.path.dirname(outfilename)
                     fnamefext = os.path.basename(outfilename)
                     fname = fnamefext.split(".")[0]

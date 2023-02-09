@@ -451,7 +451,10 @@ class VideoBot(object):
         playerslist = ppl.read().split("\n")
         ppl.close()
         playersregexes = []
+        emptyspacepattern = re.compile("^\s*$", re.DOTALL)
         for player in playerslist:
+            if re.search(emptyspacepattern, player):
+                continue
             playerregex = re.compile(player, re.IGNORECASE|re.DOTALL)
             playersregexes.append(playerregex)
         metadata = {}

@@ -436,7 +436,7 @@ class VideoBot(object):
         return streamurl
 
 
-    def getfeedmetadata(self, pageurl):
+    def getfeedmetadata(self, pageurl, playerslistfile="players.list"):
         """
         Returns the following metadata as a dict:
         FeedTitle, FeedEventTeam1 (name of participating player(s) separated by commas),
@@ -447,6 +447,13 @@ class VideoBot(object):
         is False), FeedPath (location/path of feed on the disk), FeedUpdated (datetime val),
         FeedUpdatedUser (User who last updated the feed, default is 0).
         """
+        ppl = open(playerslistfile, "r") # Read the players list file.
+        playerslist = ppl.read().split("\n")
+        ppl.close()
+        playersregexes = []
+        for player in playerslist:
+            playerregex = re.compile(player, re.IGNORECASE|re.DOTALL)
+            playersregexes.append(playerregex)
         metadata = {}
         pagerequest = urllib.request.Request(pageurl, headers=self.httpHeaders)
         try:
@@ -551,6 +558,15 @@ class VideoBot(object):
                 team2 = htmltagPattern.sub("", team2)
                 team2 = beginspacePattern.sub("", team2)
                 team2 = endspacePattern.sub("", team2)
+        capturable = False
+        for pprx in playersregexes:
+            ppm1 = re.search(pprx, team1)
+            ppm2 = re.search(pprx, team2)
+            if ppm1 or ppm2:
+                 capturable = True
+                 break
+        if capturable == False:
+            return None
         metadata['FeedTitle'] = eventtitle
         metadata['FeedEventTeam1'] = team1
         metadata['FeedEventTeam2'] = team2
@@ -572,6 +588,9 @@ if __name__ == "__main__":
         sys.exit()
     signal.signal(signal.SIGINT, handler)
     siteurl = sys.argv[1]
+    playerslistfile = "players.list"
+    if sys.argv.__len__() > 2:
+        playerslistfile = sys.argv[2]
     itftennis = VideoBot(siteurl)
     outlist = []
     t = Thread(target=itftennis.framewriter, args=(outlist,))
@@ -627,7 +646,7 @@ if __name__ == "__main__":
                 print("Adding %s to list..."%streamurl)
                 if streamurl is not None:
                     # Now, get feed metadata...
-                    metadata = itftennis.getfeedmetadata(streampageurl)
+                    metadata = itftennis.getfeedmetadata(streampageurl, playerslistfile)
                     if metadata is None:
                         continue
                     #if matchescounter >= itftennis.__class__.MAX_CONCURRENT_MATCHES:

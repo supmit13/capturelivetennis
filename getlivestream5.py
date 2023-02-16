@@ -480,7 +480,7 @@ class VideoBot(object):
         beginspacePattern = re.compile("^\s+")
         endspacePattern = re.compile("\s+$")
         eventtitle, team1, team2, eventtype, startdate, enddate, eventstatus, deleted = "", "", "", "", "", "", "live", 0
-        womenpattern = re.compile("women", re.IGNORECASE|re.DOTALL)
+        #womenpattern = re.compile("women", re.IGNORECASE|re.DOTALL)
         subtitlespan = soup.find("span", {'class' : 'sub_title'})
         if subtitlespan is not None:
             eventtype = subtitlespan.renderContents().decode('utf-8')
@@ -488,10 +488,10 @@ class VideoBot(object):
             eventtype = htmltagPattern.sub("", eventtype)
             eventtype = beginspacePattern.sub("", eventtype)
             eventtype = endspacePattern.sub("", eventtype)
-            if not re.search(womenpattern, eventtype): # We cover women's matches only
-                return None
+            #if not re.search(womenpattern, eventtype): # We cover women's matches only
+            #    return None
         h1tags = soup.find_all("h1")
-        w15pattern = re.compile("w15", re.IGNORECASE|re.DOTALL)
+        #w15pattern = re.compile("w15", re.IGNORECASE|re.DOTALL)
         doublespattern = re.compile("doubles", re.IGNORECASE|re.DOTALL)
         if h1tags.__len__() > 0:
             eventtitle = h1tags[0].renderContents().decode('utf-8')
@@ -501,8 +501,8 @@ class VideoBot(object):
             eventtitle = beginspacePattern.sub("", eventtitle)
             eventtitle = endspacePattern.sub("", eventtitle)
             print("Event Title: %s"%eventtitle)
-            if re.search(w15pattern, eventtitle): # We don't cover w15 matches.
-                return None
+            #if re.search(w15pattern, eventtitle): # We don't cover w15 matches.
+            #    return None
             if re.search(doublespattern, eventtitle): # We are interested in singles matches only.
                 return None
         datetimediv = soup.find("div", {'class' : 'video_date'})

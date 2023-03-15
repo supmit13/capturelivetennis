@@ -646,7 +646,7 @@ if __name__ == "__main__":
                     continue
                 print("Detected new live stream... Getting it.")
                 streamurl = itftennis.getstreamurlfrompage(streampageurl)
-                print("Adding %s to list..."%streamurl)
+                print("Checking %s with players list..."%streamurl)
                 if streamurl is not None:
                     # Now, get feed metadata...
                     metadata = itftennis.getfeedmetadata(streampageurl, playerslistfile)

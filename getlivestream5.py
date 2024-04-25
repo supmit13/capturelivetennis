@@ -309,7 +309,7 @@ class VideoBot(object):
         #read_size = 1280 * 720 * 1 # This is width * height * 1
         read_size = 320 * 180 * 3 # This is width * height * 3
         lastcaptured = time.time()
-        maxtries = 12
+        maxtries = 30 # Previously, this was 12. Edited on 25-04-2024
         ntries = 0
         while True:
             if process:
@@ -327,7 +327,7 @@ class VideoBot(object):
                     if self.DEBUG:
                         print("Could not read frame for feed ID %s"%feedid)
                     t = time.time()
-                    if t - lastcaptured > 30: # If the frames can't be read for more than 30 seconds...
+                    if t - lastcaptured > 300: # If the frames can't be read for more than 300 seconds...  Edited on 25-04-2024
                         print("Reopening feed identified by feed ID %s"%feedid)
                         process = ffmpeg.input(streamurl).output('pipe:', pix_fmt='yuv420p', format='avi', vcodec='copy', acodec='copy', loglevel='quiet').run_async(pipe_stdout=True)
                         ntries += 1

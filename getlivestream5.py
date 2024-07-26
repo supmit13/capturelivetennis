@@ -369,12 +369,16 @@ class VideoBot(object):
         #cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf mpdecimate,scale=1280:720,setdar=16/9 -vsync vfr -preset slow -crf 18 -copyts %s"%(outfilename, combinedfile)
         cmd = "ffmpeg -y -i %s -muxdelay 0 -pix_fmt yuv420p -vcodec libx264 -vf scale=1280:720,setdar=16/9 -vsync vfr -speed 4 -crf 18 -copyts %s"%(outfilename, combinedfile)
         cmdretval = -1
-        try:
-            cmdretval = subprocess.call(cmd, timeout=21600, shell=True) # successful completion should set cmdretval to 0. Timeout after 6 hours from start.
-        except:
-            pass
+        if os.path.getsize(outfilename) > 0:
+            try:
+                cmdretval = subprocess.call(cmd, timeout=21600, shell=True) # successful completion should set cmdretval to 0. Timeout after 6 hours from start.
+            except:
+                pass
         if not os.path.exists(combinedfile):
-            shutil.copy(outfilename, combinedfile)
+            if os.path.getsize(outfilename) > 0:
+                shutil.copy(outfilename, combinedfile)
+            #if os.path.getsize(outfilename) == 0:
+            #    os.unlink(outfilename)
             #os.unlink(outfilename) # Remove the file as we have it copied to "final" dir.
         return cmdretval
 

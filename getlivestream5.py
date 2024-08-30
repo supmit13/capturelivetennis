@@ -504,7 +504,7 @@ class VideoBot(object):
             eventtitle = eventtitle.replace("LIVESTREAM:", "")
             eventtitle = beginspacePattern.sub("", eventtitle)
             eventtitle = endspacePattern.sub("", eventtitle)
-            print("Event Title: %s"%eventtitle)
+            print("Event Title: %s"%eventtitle.encode('utf-8'))
             #if re.search(w15pattern, eventtitle): # We don't cover w15 matches.
             #    return None
             if re.search(doublespattern, eventtitle): # We are interested in singles matches only.

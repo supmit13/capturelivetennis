@@ -572,6 +572,9 @@ class VideoBot(object):
             if ppm1 or ppm2:
                  capturable = True
                  break
+        nonthaburiPattern = re.compile("nonthaburi", re.IGNORECASE)
+        if re.search(nonthaburiPattern, eventtitle) is not None:
+            capturable = True
         if capturable == False:
             return None
         metadata['FeedTitle'] = eventtitle
